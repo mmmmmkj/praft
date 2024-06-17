@@ -2,12 +2,14 @@ package utils
 
 import (
 	"fmt"
-	"github.com/hashicorp/raft"
-	raftprevious "github.com/hashicorp/raft-previous-version"
-	"github.com/hashicorp/raft/compat/testcluster"
-	"github.com/stretchr/testify/require"
+	//"github.com/hashicorp/raft"
 	"testing"
 	"time"
+
+	raft "github.com/mmmmmkj/praft"
+	raftprevious "github.com/mmmmmkj/praft-previous-version"
+	"github.com/mmmmmkj/praft/compat/testcluster"
+	"github.com/stretchr/testify/require"
 )
 
 func WaitForNewLeader(t *testing.T, oldLeader string, c testcluster.RaftCluster) {

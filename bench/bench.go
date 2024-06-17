@@ -11,7 +11,8 @@ package raftbench
 import (
 	"testing"
 
-	"github.com/hashicorp/raft"
+	//"github.com/hashicorp/raft"
+	raft "github.com/mmmmmkj/praft"
 )
 
 func FirstIndex(b *testing.B, store raft.LogStore) {

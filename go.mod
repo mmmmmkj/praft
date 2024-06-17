@@ -4,9 +4,8 @@ go 1.20
 
 require (
 	github.com/armon/go-metrics v0.4.1
-	github.com/hashicorp/go-hclog v1.6.3
-	github.com/hashicorp/go-msgpack/v2 v2.1.2
-	github.com/hashicorp/raft v1.7.0
+	github.com/hashicorp/go-hclog v1.6.2
+	github.com/hashicorp/go-msgpack/v2 v2.1.1
 	github.com/stretchr/testify v1.8.4
 )
 

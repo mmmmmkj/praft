@@ -8,7 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/raft"
+	raft "github.com/mmmmmkj/praft"
+	//"github.com/hashicorp/raft"
 )
 
 // 5 node cluster where 2 nodes always see a delay in getting a request vote msg.

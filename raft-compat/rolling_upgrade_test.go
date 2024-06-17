@@ -1,10 +1,11 @@
 package raft_compat
 
 import (
-	"github.com/hashicorp/raft"
-	raftprevious "github.com/hashicorp/raft-previous-version"
-	"github.com/hashicorp/raft/compat/testcluster"
-	"github.com/hashicorp/raft/compat/utils"
+	//"github.com/hashicorp/raft"
+	"github.com/mmmmmkj/praft"
+	raftprevious "github.com/mmmmmkj/praft-previous-version"
+	"github.com/mmmmmkj/praft/compat/testcluster"
+	"github.com/mmmmmkj/praft"/compat/utils"
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"

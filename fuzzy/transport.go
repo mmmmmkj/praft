@@ -16,7 +16,9 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-msgpack/v2/codec"
-	"github.com/hashicorp/raft"
+
+	//"github.com/hashicorp/raft"
+	raft "github.com/mmmmmkj/praft"
 )
 
 var codecHandle codec.MsgpackHandle

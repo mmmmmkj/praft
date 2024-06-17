@@ -11,7 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/raft"
+	raft "github.com/mmmmmkj/praft"
+	//"github.com/hashicorp/raft"
 )
 
 // 5 node cluster where the leader and another node get regularly partitioned off

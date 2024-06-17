@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-
-	"github.com/hashicorp/raft"
+	raft "github.com/mmmmmkj/praft"
+	//"github.com/hashicorp/raft"
 )
 
 type appliedItem struct {
