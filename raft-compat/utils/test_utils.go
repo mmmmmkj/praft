@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	raftprevious "github.com/hashicorp/raft-previous-version"
 	raft "github.com/mmmmmkj/praft"
-	raftprevious "github.com/mmmmmkj/praft-previous-version"
 	"github.com/mmmmmkj/praft/compat/testcluster"
 	"github.com/stretchr/testify/require"
 )

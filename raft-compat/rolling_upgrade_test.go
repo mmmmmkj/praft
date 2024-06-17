@@ -2,13 +2,14 @@ package raft_compat
 
 import (
 	//"github.com/hashicorp/raft"
-	"github.com/mmmmmkj/praft"
-	raftprevious "github.com/mmmmmkj/praft-previous-version"
-	"github.com/mmmmmkj/praft/compat/testcluster"
-	"github.com/mmmmmkj/praft"/compat/utils"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	raftprevious "github.com/hashicorp/raft-previous-version"
+	raft "github.com/mmmmmkj/praft"
+	"github.com/mmmmmkj/praft/compat/testcluster"
+	"github.com/mmmmmkj/praft/compat/utils"
+	"github.com/stretchr/testify/require"
 )
 
 // TestRaft_RollingUpgrade This test perform a rolling upgrade by adding a new node,
