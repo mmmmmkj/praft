@@ -279,7 +279,7 @@ func (r *Raft) runGroupFollower() {
 			} else {
 				metrics.IncrCounter([]string{"raft", "transition", "heartbeat_timeout"}, 1)
 				if hasVote(r.configurations.latest, r.localID) {
-					r.logger.Warn("heartbeat timeout reached, starting election", "last-leader-addr", lastLeaderAddr, "last-leader-id", lastLeaderID)
+					//r.logger.Warn("heartbeat timeout reached, starting election", "last-leader-addr", lastLeaderAddr, "last-leader-id", lastLeaderID)
 					r.logger.Warn("heartbeat timeout reached, starting election", "last-group-leader-addr", lastGroupLeaderAddr, "last-group-leader-id", lastGroupLeaderID)
 					r.setState(GroupCandidate)
 					return
@@ -425,7 +425,7 @@ func (r *Raft) liveBootstrap(configuration Configuration) error {
 // runGroupCandidate runs the main loop while in the groupCandidate state.
 func (r *Raft) runGroupCandidate() {
 	term := r.getCurrentTerm() + 1
-	r.logger.Info("entering candidate state", "node", r, "term", term)
+	r.logger.Info("entering group candidate state", "node", r, "term", term)
 	metrics.IncrCounter([]string{"raft", "state", "groupCandidate"}, 1)
 
 	// Start vote for us, and set a timeout
@@ -447,7 +447,8 @@ func (r *Raft) runGroupCandidate() {
 	//votesNeeded := r.quorumSize()
 	votesNeeded := r.groupQuorumSize()
 	r.logger.Debug("groupCalculated votes needed", "needed", votesNeeded, "term", term)
-
+	//r.
+	r.logger.Debug("groupSever :", len(r.configurations.latest.ServersInGroup))
 	for r.getState() == GroupCandidate {
 		r.mainThreadSaturation.sleeping()
 
