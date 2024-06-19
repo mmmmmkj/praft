@@ -260,7 +260,7 @@ func (r *Raft) runGroupFollower() {
 				continue
 			}
 			// Heartbeat failed! Transition to the candidate state
-			lastLeaderAddr, lastLeaderID := r.LeaderWithID()
+			//lastLeaderAddr, lastLeaderID := r.LeaderWithID()
 			r.setLeader("", "")
 			lastGroupLeaderAddr, lastGroupLeaderID := r.GroupLeaderWithID()
 			r.setGroupLeader("", "")
