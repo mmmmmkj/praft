@@ -3,7 +3,12 @@
 
 package raft
 
-import "fmt"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"strconv"
+)
 
 // ServerSuffrage determines whether a Server in a Configuration gets a vote.
 type ServerSuffrage int
@@ -83,11 +88,17 @@ type Configuration struct {
 	Servers              []Server
 	ServersInGroup       []Server
 	ServersIsGroupLeader []Server
+	ConsistentHash       *Consistent
+	groupId              int
 }
 
 // Clone makes a deep copy of a Configuration.
 func (c *Configuration) Clone() (copy Configuration) {
 	copy.Servers = append(copy.Servers, c.Servers...)
+	copy.ServersInGroup = append(copy.ServersInGroup, c.ServersInGroup...)
+	copy.ServersIsGroupLeader = append(copy.ServersIsGroupLeader, c.ServersIsGroupLeader...)
+	copy.groupId = c.groupId
+	//copy.ConsistentHash = c.ConsistentHash
 	return
 }
 
@@ -197,6 +208,28 @@ func inConfiguration(configuration Configuration, id ServerID) bool {
 	return false
 }
 
+// inConfiguration returns true if the server identified by 'id' is in in the
+// provided Configuration.
+func inConfigurationGroup(configuration Configuration, id ServerID) bool {
+	for _, server := range configuration.ServersInGroup {
+		if server.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// inConfiguration returns true if the server identified by 'id' is in in the
+// provided Configuration.
+func inConfigurationGroupLeader(configuration Configuration, id ServerID) bool {
+	for _, server := range configuration.ServersIsGroupLeader {
+		if server.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 // checkConfiguration tests a cluster membership configuration for common
 // errors.
 func checkConfiguration(configuration Configuration) error {
@@ -239,12 +272,33 @@ func nextConfiguration(current Configuration, currentIndex uint64, change config
 	configuration := current.Clone()
 	switch change.command {
 	case AddVoter:
+		//change group
 		newServer := Server{
 			Suffrage: Voter,
 			ID:       change.serverID,
 			Address:  change.serverAddress,
 		}
 		found := false
+		hash := sha256.New()
+		hexString := hash.Sum([]byte(change.serverID))
+		tenInt, _ := strconv.Atoi(hex.EncodeToString(hexString))
+		groupId := tenInt % 3
+		if groupId == configuration.groupId {
+			for i, server := range configuration.ServersInGroup {
+				if server.ID == change.serverID {
+					if server.Suffrage == Voter {
+						configuration.ServersInGroup[i].Address = change.serverAddress
+					} else {
+						configuration.ServersInGroup[i] = newServer
+					}
+					found = true
+					break
+				}
+			}
+			if !found {
+				configuration.ServersInGroup = append(configuration.ServersInGroup, newServer)
+			}
+		}
 		for i, server := range configuration.Servers {
 			if server.ID == change.serverID {
 				if server.Suffrage == Voter {
@@ -292,6 +346,18 @@ func nextConfiguration(current Configuration, currentIndex uint64, change config
 			if server.ID == change.serverID {
 				configuration.Servers = append(configuration.Servers[:i], configuration.Servers[i+1:]...)
 				break
+			}
+		}
+		hash := sha256.New()
+		hexString := hash.Sum([]byte(change.serverID))
+		tenInt, _ := strconv.Atoi(hex.EncodeToString(hexString))
+		groupId := tenInt % 3
+		if groupId == configuration.groupId {
+			for i, server := range configuration.ServersInGroup {
+				if server.ID == change.serverID {
+					configuration.ServersInGroup = append(configuration.ServersInGroup[:i], configuration.ServersInGroup[i+1:]...)
+					break
+				}
 			}
 		}
 	case Promote:
