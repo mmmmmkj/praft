@@ -4,6 +4,8 @@
 package raft
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -159,6 +161,8 @@ type Raft struct {
 
 	// LogStore provides durable storage for logs
 	logs LogStore
+
+	groupId int
 
 	// Used to request the leader to make configuration changes.
 	configurationChangeCh chan *configurationChangeFuture
@@ -503,6 +507,13 @@ func HasExistingState(logs LogStore, stable StableStore, snaps SnapshotStore) (b
 	return false, nil
 }
 
+func hashGroupID(serverID string) int {
+	hash := sha256.New()
+	hexString := hash.Sum([]byte(serverID))
+	tenInt, _ := strconv.Atoi(hex.EncodeToString(hexString))
+	return tenInt % 3
+}
+
 // NewRaft is used to construct a new Raft node. It takes a configuration, as well
 // as implementations of various interfaces that are required. If we have any
 // old state, such as snapshots, logs, peers, etc, all those will be restored
@@ -540,7 +551,7 @@ func NewRaft(conf *Config, fsm FSM, logs LogStore, stable StableStore, snaps Sna
 	protocolVersion := conf.ProtocolVersion
 	localAddr := trans.LocalAddr()
 	localID := conf.LocalID
-
+	groupId := hashGroupID(string(localID))
 	// TODO (slackpad) - When we deprecate protocol version 2, remove this
 	// along with the AddPeer() and RemovePeer() APIs.
 	if protocolVersion < 3 && string(localID) != string(localAddr) {
@@ -563,6 +574,7 @@ func NewRaft(conf *Config, fsm FSM, logs LogStore, stable StableStore, snaps Sna
 		leaderCh:              make(chan bool, 1),
 		localID:               localID,
 		localAddr:             localAddr,
+		groupId:               groupId,
 		logger:                logger,
 		logs:                  logs,
 		configurationChangeCh: make(chan *configurationChangeFuture),
