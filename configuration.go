@@ -4,10 +4,7 @@
 package raft
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"strconv"
 )
 
 // ServerSuffrage determines whether a Server in a Configuration gets a vote.
@@ -86,18 +83,18 @@ type Server struct {
 // These entries are appended to the log during membership changes.
 type Configuration struct {
 	Servers              []Server
-	ServersInGroup       []Server
+	ServersInGroup       map[int][]Server
 	ServersIsGroupLeader []Server
 	ConsistentHash       *Consistent
-	groupId              int
 }
 
 // Clone makes a deep copy of a Configuration.
 func (c *Configuration) Clone() (copy Configuration) {
 	copy.Servers = append(copy.Servers, c.Servers...)
-	copy.ServersInGroup = append(copy.ServersInGroup, c.ServersInGroup...)
+	for groupId, servers := range c.ServersInGroup {
+		copy.ServersInGroup[groupId] = append(copy.ServersInGroup[groupId], servers...)
+	}
 	copy.ServersIsGroupLeader = append(copy.ServersIsGroupLeader, c.ServersIsGroupLeader...)
-	copy.groupId = c.groupId
 	//copy.ConsistentHash = c.ConsistentHash
 	return
 }
@@ -211,10 +208,13 @@ func inConfiguration(configuration Configuration, id ServerID) bool {
 // inConfiguration returns true if the server identified by 'id' is in in the
 // provided Configuration.
 func inConfigurationGroup(configuration Configuration, id ServerID) bool {
-	for _, server := range configuration.ServersInGroup {
-		if server.ID == id {
-			return true
+	for _, servers := range configuration.ServersInGroup {
+		for _, server := range servers {
+			if server.ID == id {
+				return true
+			}
 		}
+
 	}
 	return false
 }
@@ -279,26 +279,28 @@ func nextConfiguration(current Configuration, currentIndex uint64, change config
 			Address:  change.serverAddress,
 		}
 		found := false
-		hash := sha256.New()
-		hexString := hash.Sum([]byte(change.serverID))
-		tenInt, _ := strconv.Atoi(hex.EncodeToString(hexString))
-		groupId := tenInt % 3
-		if groupId == configuration.groupId {
-			for i, server := range configuration.ServersInGroup {
+
+		groupId := hashGroupID(string(change.serverID))
+		_, exist := configuration.ServersInGroup[groupId]
+		if exist {
+			for i, server := range configuration.ServersInGroup[groupId] {
 				if server.ID == change.serverID {
 					if server.Suffrage == Voter {
-						configuration.ServersInGroup[i].Address = change.serverAddress
+						configuration.ServersInGroup[groupId][i].Address = change.serverAddress
 					} else {
-						configuration.ServersInGroup[i] = newServer
+						configuration.ServersInGroup[groupId][i] = newServer
 					}
 					found = true
 					break
 				}
 			}
 			if !found {
-				configuration.ServersInGroup = append(configuration.ServersInGroup, newServer)
+				configuration.ServersInGroup[groupId] = append(configuration.ServersInGroup[groupId], newServer)
 			}
+		} else {
+			configuration.ServersInGroup[groupId] = []Server{newServer}
 		}
+
 		for i, server := range configuration.Servers {
 			if server.ID == change.serverID {
 				if server.Suffrage == Voter {
@@ -348,16 +350,17 @@ func nextConfiguration(current Configuration, currentIndex uint64, change config
 				break
 			}
 		}
-		hash := sha256.New()
-		hexString := hash.Sum([]byte(change.serverID))
-		tenInt, _ := strconv.Atoi(hex.EncodeToString(hexString))
-		groupId := tenInt % 3
-		if groupId == configuration.groupId {
-			for i, server := range configuration.ServersInGroup {
-				if server.ID == change.serverID {
-					configuration.ServersInGroup = append(configuration.ServersInGroup[:i], configuration.ServersInGroup[i+1:]...)
-					break
-				}
+		/*
+			hash := sha256.New()
+			hexString := hash.Sum([]byte(change.serverID))
+			tenInt, _ := strconv.Atoi(hex.EncodeToString(hexString))
+			groupId := tenInt % 3
+		*/
+		groupId := hashGroupID(string(change.serverID))
+		for i, server := range configuration.ServersInGroup[groupId] {
+			if server.ID == change.serverID {
+				configuration.ServersInGroup[groupId] = append(configuration.ServersInGroup[groupId][:i], configuration.ServersInGroup[groupId][i+1:]...)
+				break
 			}
 		}
 	case Promote:

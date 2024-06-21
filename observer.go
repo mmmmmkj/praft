@@ -17,6 +17,7 @@ type Observation struct {
 	// RaftState
 	// PeerObservation
 	// LeaderObservation
+	// GroupLeaderOberservation
 	Data interface{}
 }
 
@@ -26,6 +27,14 @@ type LeaderObservation struct {
 	Leader     ServerAddress
 	LeaderAddr ServerAddress
 	LeaderID   ServerID
+}
+
+// GroupLeaderObservation is used for the data when leadership changes.
+type GroupLeaderObservation struct {
+	// DEPRECATED The LeaderAddr field should now be used
+	GroupLeader     ServerAddress
+	GroupLeaderAddr ServerAddress
+	GroupLeaderID   ServerID
 }
 
 // PeerObservation is sent to observers when peers change.

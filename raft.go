@@ -128,7 +128,22 @@ func (r *Raft) setGroupLeader(groupLeaderAddr ServerAddress, groupLeaderID Serve
 	r.groupLeaderLock.Unlock()
 	if oldGroupLeaderAddr != groupLeaderAddr || oldgroupLeaderID != groupLeaderID {
 		//TODO
-		r.observe(LeaderObservation{Leader: oldGroupLeaderAddr, LeaderAddr: oldGroupLeaderAddr, LeaderID: groupLeaderID})
+		r.observe(GroupLeaderObservation{GroupLeader: oldGroupLeaderAddr, GroupLeaderAddr: oldGroupLeaderAddr, GroupLeaderID: groupLeaderID})
+
+		for i, server := range r.configurations.latest.ServersInGroup[r.groupId] {
+			if server.ID == r.localID {
+				newGroupLeaderSever := r.configurations.latest.ServersIsGroupLeader[i]
+				for j, oldserver := range r.configurations.latest.ServersIsGroupLeader {
+					if oldserver.ID == oldgroupLeaderID {
+						r.configurations.latest.ServersIsGroupLeader[j] = newGroupLeaderSever
+					}
+				}
+				break
+			}
+
+		}
+
+		r.configurationsCh <- &configurationsFuture{configurations: r.configurations.Clone()}
 	}
 }
 
@@ -448,7 +463,7 @@ func (r *Raft) runGroupCandidate() {
 	votesNeeded := r.groupQuorumSize()
 	r.logger.Debug("groupCalculated votes needed", "needed", votesNeeded, "term", term)
 	//r.
-	r.logger.Debug("groupSever :", len(r.configurations.latest.ServersInGroup))
+	r.logger.Debug("groupSever :", len(r.configurations.latest.ServersInGroup[r.groupId]))
 	for r.getState() == GroupCandidate {
 		r.mainThreadSaturation.sleeping()
 
@@ -907,7 +922,7 @@ func (r *Raft) runLeader() {
 			}
 		}
 	}()
-
+	r.logger.Debug("910 code reached")
 	// Start a replication routine for each peer
 	r.startStopReplicationForLeader()
 
@@ -1000,11 +1015,11 @@ func (r *Raft) startStopReplication() {
 // index. This must only be called from the main thread.
 // TODO
 func (r *Raft) startStopReplicationForGroupLeader() {
-	inConfig := make(map[ServerID]bool, len(r.configurations.latest.ServersInGroup))
+	inConfig := make(map[ServerID]bool, len(r.configurations.latest.ServersInGroup[r.groupId]))
 	lastIdx := r.getLastIndex()
 
 	// Start replication goroutines that need starting
-	for _, server := range r.configurations.latest.ServersInGroup {
+	for _, server := range r.configurations.latest.ServersInGroup[r.groupId] {
 		if server.ID == r.localID {
 			continue
 		}
@@ -1161,6 +1176,7 @@ func (r *Raft) groupLeaderLoop() {
 	// be processed in parallel, otherwise we are basing commit on
 	// only a single peer (ourself) and replicating to an undefined set
 	// of peers.
+	r.logger.Debug("enter groupLeaderLoop")
 	stepDown := false
 	// This is only used for the first lease check, we reload lease below
 	// based on the current config value.
@@ -2043,7 +2059,7 @@ func (r *Raft) checkGroupLeaderLease() time.Duration {
 	// Check each follower
 	var maxDiff time.Duration
 	now := time.Now()
-	for _, server := range r.configurations.latest.ServersInGroup {
+	for _, server := range r.configurations.latest.ServersInGroup[r.groupId] {
 		if server.Suffrage == Voter {
 			if server.ID == r.localID {
 				contacted++
@@ -2109,7 +2125,7 @@ func (r *Raft) quorumSizeForLeader() int {
 // TODO: revisit usage
 func (r *Raft) groupQuorumSize() int {
 	voters := 0
-	for _, server := range r.configurations.latest.ServersInGroup {
+	for _, server := range r.configurations.latest.ServersInGroup[r.groupId] {
 		if server.Suffrage == Voter {
 			voters++
 		}
@@ -2923,7 +2939,7 @@ type voteResult struct {
 // vote for ourself). This must only be called from the main thread.
 func (r *Raft) electSelfInGroup() <-chan *voteResult {
 	// Create a response channel
-	respCh := make(chan *voteResult, len(r.configurations.latest.ServersInGroup))
+	respCh := make(chan *voteResult, len(r.configurations.latest.ServersInGroup[r.groupId]))
 
 	// Increment the term
 	r.setCurrentTerm(r.getCurrentTerm() + 1)
@@ -2960,7 +2976,7 @@ func (r *Raft) electSelfInGroup() <-chan *voteResult {
 	}
 
 	// For each peer, request a vote
-	for _, server := range r.configurations.latest.ServersInGroup {
+	for _, server := range r.configurations.latest.ServersInGroup[r.groupId] {
 		if server.Suffrage == Voter {
 			if server.ID == r.localID {
 				r.logger.Debug("voting for self", "term", req.Term, "id", r.localID)
@@ -3212,7 +3228,7 @@ func (r *Raft) pickGroupLeaderServer() *Server {
 func (r *Raft) pickGroupFollowerServer() *Server {
 	var pick *Server
 	var current uint64
-	for _, server := range r.configurations.latest.ServersInGroup {
+	for _, server := range r.configurations.latest.ServersInGroup[r.groupId] {
 		if server.ID == r.localID || server.Suffrage != Voter {
 			continue
 		}
