@@ -162,7 +162,7 @@ type Raft struct {
 	// LogStore provides durable storage for logs
 	logs LogStore
 
-	groupId int
+	groupId uint64
 
 	// Used to request the leader to make configuration changes.
 	configurationChangeCh chan *configurationChangeFuture
@@ -507,11 +507,11 @@ func HasExistingState(logs LogStore, stable StableStore, snaps SnapshotStore) (b
 	return false, nil
 }
 
-func hashGroupID(serverID string) int {
+func hashGroupID(serverID string) uint64 {
 	hash := sha256.New()
 	hexString := hash.Sum([]byte(serverID))
 	tenInt, _ := strconv.Atoi(hex.EncodeToString(hexString))
-	return tenInt % 3
+	return uint64(tenInt) % 3
 }
 
 // NewRaft is used to construct a new Raft node. It takes a configuration, as well

@@ -83,7 +83,7 @@ type Server struct {
 // These entries are appended to the log during membership changes.
 type Configuration struct {
 	Servers              []Server
-	ServersInGroup       map[int][]Server
+	ServersInGroup       map[uint64][]Server
 	ServersIsGroupLeader []Server
 	ConsistentHash       *Consistent
 }
