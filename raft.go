@@ -133,10 +133,15 @@ func (r *Raft) setGroupLeader(groupLeaderAddr ServerAddress, groupLeaderID Serve
 		for _, server := range r.configurations.latest.ServersInGroup[r.groupId] {
 			if server.ID == r.localID {
 				newGroupLeaderSever := server
+				found := 0
 				for j, oldserver := range r.configurations.latest.ServersIsGroupLeader {
 					if oldserver.ID == oldgroupLeaderID {
 						r.configurations.latest.ServersIsGroupLeader[j] = newGroupLeaderSever
+						found = 1
 					}
+				}
+				if found == 0 {
+					r.configurations.latest.ServersIsGroupLeader = append(r.configurations.latest.ServersIsGroupLeader, newGroupLeaderSever)
 				}
 				break
 			}
