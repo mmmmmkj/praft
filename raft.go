@@ -130,9 +130,9 @@ func (r *Raft) setGroupLeader(groupLeaderAddr ServerAddress, groupLeaderID Serve
 		//TODO
 		r.observe(GroupLeaderObservation{GroupLeader: oldGroupLeaderAddr, GroupLeaderAddr: oldGroupLeaderAddr, GroupLeaderID: groupLeaderID})
 		r.logger.Debug("setGroupLeader", "groupLeaderAddr", groupLeaderAddr, "groupLeaderID", groupLeaderID, "groupID", r.groupId)
-		for i, server := range r.configurations.latest.ServersInGroup[r.groupId] {
+		for _, server := range r.configurations.latest.ServersInGroup[r.groupId] {
 			if server.ID == r.localID {
-				newGroupLeaderSever := r.configurations.latest.ServersIsGroupLeader[i]
+				newGroupLeaderSever := server
 				for j, oldserver := range r.configurations.latest.ServersIsGroupLeader {
 					if oldserver.ID == oldgroupLeaderID {
 						r.configurations.latest.ServersIsGroupLeader[j] = newGroupLeaderSever
