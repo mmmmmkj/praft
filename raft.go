@@ -944,10 +944,12 @@ func (r *Raft) runLeader() {
 	// an unbounded number of uncommitted configurations in the log. We now
 	// maintain that there exists at most one uncommitted configuration entry in
 	// any log, so we have to do proper no-ops here.
+	r.logger.Debug("dispatchLogs begin")
 	noop := &logFuture{log: Log{Type: LogNoop}}
 	r.dispatchLogs([]*logFuture{noop})
 
 	// Sit in the leader loop until we step down
+	r.logger.Debug("leaderloop begin")
 	r.leaderLoop()
 }
 
