@@ -207,9 +207,7 @@ func (r *Raft) run() {
 // runFollower runs the main loop while in the follower state.
 func (r *Raft) runGroupFollower() {
 	didWarn := false
-	leaderAddr, leaderID := r.LeaderWithID()
 	groupLeaderAddr, groupLeaderID := r.GroupLeaderWithID()
-	r.logger.Info("entering follower state", "follower", r, "leader-address", leaderAddr, "leader-id", leaderID)
 	r.logger.Info("entering follower state", "groupFollower", r, "group-leader-address", groupLeaderAddr, "group-leader-id", groupLeaderID)
 	metrics.IncrCounter([]string{"raft", "state", "groupfollower"}, 1)
 	heartbeatTimer := randomTimeout(r.config().HeartbeatTimeout)
@@ -319,7 +317,7 @@ func (r *Raft) runGroupFollower() {
 func (r *Raft) runFollower() {
 	didWarn := false
 	leaderAddr, leaderID := r.LeaderWithID()
-	r.logger.Info("entering follower state", "follower", r, "leader-address", leaderAddr, "leader-id", leaderID)
+	r.logger.Info("entering follower state in runFollower", "follower", r, "leader-address", leaderAddr, "leader-id", leaderID)
 	metrics.IncrCounter([]string{"raft", "state", "follower"}, 1)
 	heartbeatTimer := randomTimeout(r.config().HeartbeatTimeout)
 
@@ -2052,7 +2050,7 @@ func (r *Raft) checkLeaderLease() time.Duration {
 	}
 
 	// Verify we can contact a quorum
-	quorum := r.quorumSize()
+	quorum := r.quorumSizeForLeader()
 	if contacted < quorum {
 		r.logger.Warn("failed to contact quorum of nodes, stepping down")
 		r.setState(GroupFollower)
@@ -3131,7 +3129,7 @@ func (r *Raft) electSelfBetweenGroup() <-chan *voteResult {
 	}
 
 	// For each peer, request a vote
-	for _, server := range r.configurations.latest.Servers {
+	for _, server := range r.configurations.latest.ServersIsGroupLeader {
 		if server.Suffrage == Voter {
 			if server.ID == r.localID {
 				r.logger.Debug("voting for self", "term", req.Term, "id", r.localID)
