@@ -829,9 +829,10 @@ func (r *Raft) runGroupLeader() {
 	// an unbounded number of uncommitted configurations in the log. We now
 	// maintain that there exists at most one uncommitted configuration entry in
 	// any log, so we have to do proper no-ops here.
-	noop := &logFuture{log: Log{Type: LogNoop}}
-	r.logger.Debug("dispatchLogs begin")
-	r.dispatchLogs([]*logFuture{noop})
+
+	// noop := &logFuture{log: Log{Type: LogNoop}}
+	// r.logger.Debug("dispatchLogs begin")
+	// r.dispatchLogs([]*logFuture{noop})
 
 	// Sit in the leader loop until we step down
 	r.logger.Debug("groupLeaderLoop begin")
