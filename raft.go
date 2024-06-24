@@ -727,11 +727,13 @@ func (r *Raft) runGroupLeader() {
 
 	// Notify that we are the leader
 	//TODO
+	r.logger.Debug("overrideNotifyBool begin")
 	overrideNotifyBool(r.groupLeaderCh, true)
 
 	// Store the notify chan. It's not reloadable so shouldn't change before the
 	// defer below runs, but this makes sure we always notify the same chan if
 	// ever for both gaining and loosing leadership.
+	r.logger.Debug("r.config().NotifyCh begin")
 	notify := r.config().NotifyCh
 
 	// Push to the notify channel if given
@@ -750,6 +752,7 @@ func (r *Raft) runGroupLeader() {
 	// setup leader state. This is only supposed to be accessed within the
 	// leaderloop.
 	//r.setupLeaderState()
+	r.logger.Debug("setupGroupLeaderState begin")
 	r.setupGroupLeaderState()
 
 	// Run a background go-routine to emit metrics on log age
@@ -817,6 +820,7 @@ func (r *Raft) runGroupLeader() {
 		}
 	}()
 	// Start a replication routine for each peer
+	r.logger.Debug("startStopReplicationForGroupLeader begin")
 	r.startStopReplicationForGroupLeader()
 
 	// Dispatch a no-op log entry first. This gets this leader up to the latest
@@ -826,9 +830,11 @@ func (r *Raft) runGroupLeader() {
 	// maintain that there exists at most one uncommitted configuration entry in
 	// any log, so we have to do proper no-ops here.
 	noop := &logFuture{log: Log{Type: LogNoop}}
+	r.logger.Debug("dispatchLogs begin")
 	r.dispatchLogs([]*logFuture{noop})
 
 	// Sit in the leader loop until we step down
+	r.logger.Debug("groupLeaderLoop begin")
 	r.groupLeaderLoop()
 }
 
