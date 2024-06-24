@@ -91,6 +91,7 @@ type Configuration struct {
 // Clone makes a deep copy of a Configuration.
 func (c *Configuration) Clone() (copy Configuration) {
 	copy.Servers = append(copy.Servers, c.Servers...)
+	copy.ServersInGroup = make(map[uint64][]Server)
 	for groupId, servers := range c.ServersInGroup {
 		copy.ServersInGroup[groupId] = append(copy.ServersInGroup[groupId], servers...)
 	}
