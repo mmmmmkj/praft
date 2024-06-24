@@ -572,6 +572,7 @@ func NewRaft(conf *Config, fsm FSM, logs LogStore, stable StableStore, snaps Sna
 		fsmMutateCh:           make(chan interface{}, 128),
 		fsmSnapshotCh:         make(chan *reqSnapshotFuture),
 		leaderCh:              make(chan bool, 1),
+		groupLeaderCh:         make(chan bool, 1),
 		localID:               localID,
 		localAddr:             localAddr,
 		groupId:               groupId,
@@ -1144,6 +1145,10 @@ func (r *Raft) State() RaftState {
 // the the receiver was processing first leadership transition.
 func (r *Raft) LeaderCh() <-chan bool {
 	return r.leaderCh
+}
+
+func (r *Raft) GroupLeaderCh() <-chan bool {
+	return r.groupLeaderCh
 }
 
 // String returns a string representation of this Raft node.
