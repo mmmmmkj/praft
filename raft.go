@@ -2774,7 +2774,11 @@ func (r *Raft) requestVote(rpc RPC, req *RequestVoteRequest) {
 	if req.Term > r.getCurrentTerm() {
 		// Ensure transition to follower
 		r.logger.Debug("lost leadership because received a requestVote with a newer term")
-		r.setState(Follower)
+		if r.getState() == Leader || r.getState() == Candidate {
+			r.setState(GroupLeader)
+		} else if r.getState() == GroupLeader || r.getState() == GroupCandidate {
+			r.setState(GroupFollower)
+		}
 		r.setCurrentTerm(req.Term)
 		resp.Term = req.Term
 	}
@@ -2884,7 +2888,11 @@ func (r *Raft) installSnapshot(rpc RPC, req *InstallSnapshotRequest) {
 	// Increase the term if we see a newer one
 	if req.Term > r.getCurrentTerm() {
 		// Ensure transition to follower
-		r.setState(Follower)
+		if r.getState() == Leader || r.getState() == Candidate {
+			r.setState(GroupLeader)
+		} else if r.getState() == GroupLeader || r.getState() == GroupCandidate {
+			r.setState(GroupFollower)
+		}
 		r.setCurrentTerm(req.Term)
 		resp.Term = req.Term
 	}
