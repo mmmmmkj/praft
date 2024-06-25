@@ -1801,6 +1801,7 @@ func (r *Raft) leaderLoop() {
 		case <-lease:
 			r.mainThreadSaturation.working()
 			// Check if we've exceeded the lease, potentially stepping down
+			r.logger.Debug("checking lease begin")
 			maxDiff := r.checkLeaderLease()
 
 			// Next check interval should adjust for the last node we've
