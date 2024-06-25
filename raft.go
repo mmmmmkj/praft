@@ -316,8 +316,8 @@ func (r *Raft) runGroupFollower() {
 // runFollower runs the main loop while in the follower state.
 func (r *Raft) runFollower() {
 	didWarn := false
-	leaderAddr, leaderID := r.LeaderWithID()
-	r.logger.Info("entering follower state in runFollower", "follower", r, "leader-address", leaderAddr, "leader-id", leaderID)
+	//leaderAddr, leaderID := r.LeaderWithID()
+	//r.logger.Info("entering follower state in runFollower", "follower", r, "leader-address", leaderAddr, "leader-id", leaderID)
 	metrics.IncrCounter([]string{"raft", "state", "follower"}, 1)
 	heartbeatTimer := randomTimeout(r.config().HeartbeatTimeout)
 
