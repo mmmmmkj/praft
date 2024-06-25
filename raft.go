@@ -1040,12 +1040,12 @@ func (r *Raft) startStopReplicationForGroupLeader() {
 
 		inConfig[server.ID] = true
 
-		s, ok := r.leaderState.replState[server.ID]
+		s, ok := r.groupLeaderState.replState[server.ID]
 		if !ok {
 			r.logger.Info("added peer, starting replication", "peer", server.ID)
 			s = &followerReplication{
 				peer:                              server,
-				commitment:                        r.leaderState.commitment,
+				commitment:                        r.groupLeaderState.commitment,
 				stopCh:                            make(chan uint64, 1),
 				triggerForGroupLeaderCh:           make(chan struct{}, 1),
 				triggerForGroupLeaderDeferErrorCh: make(chan *deferError, 1),
@@ -1054,10 +1054,10 @@ func (r *Raft) startStopReplicationForGroupLeader() {
 				lastContact:                       time.Now(),
 				notify:                            make(map[*verifyFuture]struct{}),
 				notifyCh:                          make(chan struct{}, 1),
-				stepDown:                          r.leaderState.stepDown,
+				stepDown:                          r.groupLeaderState.stepDown,
 			}
 
-			r.leaderState.replState[server.ID] = s
+			r.groupLeaderState.replState[server.ID] = s
 			r.goFunc(func() { r.replicateForGroupLeader(s) })
 			asyncNotifyCh(s.triggerForGroupLeaderCh)
 			r.observe(PeerObservation{Peer: server, Removed: false})
