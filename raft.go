@@ -1981,7 +1981,7 @@ func (r *Raft) checkLeaderLease() time.Duration {
 	// Check each follower
 	var maxDiff time.Duration
 	now := time.Now()
-	for _, server := range r.configurations.latest.Servers {
+	for _, server := range r.configurations.latest.ServersInGroup[r.groupId] {
 		if server.Suffrage == Voter {
 			if server.ID == r.localID {
 				contacted++
