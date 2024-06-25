@@ -501,7 +501,8 @@ func (c *cluster) Leader() *Raft {
 // state.
 func (c *cluster) Followers() []*Raft {
 	expFollowers := len(c.rafts) - 1
-	followers := c.GetInState(Follower)
+	c.logger.Debug("followers := c.GetInState(GroupFollower)")
+	followers := c.GetInState(GroupFollower)
 	if len(followers) != expFollowers {
 		c.t.Fatalf("timeout waiting for %d followers (followers are %v)", expFollowers, followers)
 	}
