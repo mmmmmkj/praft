@@ -208,7 +208,7 @@ func (r *Raft) run() {
 func (r *Raft) runGroupFollower() {
 	didWarn := false
 	groupLeaderAddr, groupLeaderID := r.GroupLeaderWithID()
-	r.logger.Info("entering follower state", "groupFollower", r, "group-leader-address", groupLeaderAddr, "group-leader-id", groupLeaderID)
+	r.logger.Info("entering follower state in runGroupFollower", "groupFollower", r, "group-leader-address", groupLeaderAddr, "group-leader-id", groupLeaderID)
 	metrics.IncrCounter([]string{"raft", "state", "groupfollower"}, 1)
 	heartbeatTimer := randomTimeout(r.config().HeartbeatTimeout)
 
@@ -1989,6 +1989,7 @@ func (r *Raft) checkLeaderLease() time.Duration {
 				continue
 			}
 			f := r.leaderState.replState[server.ID]
+			r.logger.Debug("checkLeaderLease", "server-id", server.ID, "lastContact", f.LastContact(), "state", r.getState())
 			diff := now.Sub(f.LastContact())
 			if diff <= leaseTimeout {
 				contacted++
