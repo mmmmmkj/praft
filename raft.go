@@ -942,9 +942,9 @@ func (r *Raft) runLeader() {
 	// an unbounded number of uncommitted configurations in the log. We now
 	// maintain that there exists at most one uncommitted configuration entry in
 	// any log, so we have to do proper no-ops here.
-	r.logger.Debug("dispatchLogs begin")
+	r.logger.Debug("dispatchLogsforleader begin")
 	noop := &logFuture{log: Log{Type: LogNoop}}
-	r.dispatchLogs([]*logFuture{noop})
+	r.dispatchLogsForLeader([]*logFuture{noop})
 
 	// Sit in the leader loop until we step down
 	r.logger.Debug("leaderloop begin")
@@ -956,6 +956,7 @@ func (r *Raft) runLeader() {
 // it'll instruct the replication routines to try to replicate to the current
 // index. This must only be called from the main thread.
 // TODO
+/*
 func (r *Raft) startStopReplication() {
 	inConfig := make(map[ServerID]bool, len(r.configurations.latest.Servers))
 	lastIdx := r.getLastIndex()
@@ -1020,7 +1021,7 @@ func (r *Raft) startStopReplication() {
 	// Update peers metric
 	metrics.SetGauge([]string{"raft", "peers"}, float32(len(r.configurations.latest.Servers)))
 }
-
+*/
 // startStopReplication will set up state and start asynchronous replication to
 // new peers, and stop replication to removed peers. Before removing a peer,
 // it'll instruct the replication routines to try to replicate to the current
@@ -1042,22 +1043,22 @@ func (r *Raft) startStopReplicationForGroupLeader() {
 		if !ok {
 			r.logger.Info("added peer, starting replication", "peer", server.ID)
 			s = &followerReplication{
-				peer:                server,
-				commitment:          r.leaderState.commitment,
-				stopCh:              make(chan uint64, 1),
-				triggerCh:           make(chan struct{}, 1),
-				triggerDeferErrorCh: make(chan *deferError, 1),
-				currentTerm:         r.getCurrentTerm(),
-				nextIndex:           lastIdx + 1,
-				lastContact:         time.Now(),
-				notify:              make(map[*verifyFuture]struct{}),
-				notifyCh:            make(chan struct{}, 1),
-				stepDown:            r.leaderState.stepDown,
+				peer:                              server,
+				commitment:                        r.leaderState.commitment,
+				stopCh:                            make(chan uint64, 1),
+				triggerForGroupLeaderCh:           make(chan struct{}, 1),
+				triggerForGroupLeaderDeferErrorCh: make(chan *deferError, 1),
+				currentTerm:                       r.getCurrentTerm(),
+				nextIndex:                         lastIdx + 1,
+				lastContact:                       time.Now(),
+				notify:                            make(map[*verifyFuture]struct{}),
+				notifyCh:                          make(chan struct{}, 1),
+				stepDown:                          r.leaderState.stepDown,
 			}
 
 			r.leaderState.replState[server.ID] = s
-			r.goFunc(func() { r.replicate(s) })
-			asyncNotifyCh(s.triggerCh)
+			r.goFunc(func() { r.replicateForGroupLeader(s) })
+			asyncNotifyCh(s.triggerForGroupLeaderCh)
 			r.observe(PeerObservation{Peer: server, Removed: false})
 		} else if ok {
 
@@ -1112,22 +1113,22 @@ func (r *Raft) startStopReplicationForLeader() {
 		if !ok {
 			r.logger.Info("added peer, starting replication", "peer", server.ID)
 			s = &followerReplication{
-				peer:                server,
-				commitment:          r.leaderState.commitment,
-				stopCh:              make(chan uint64, 1),
-				triggerCh:           make(chan struct{}, 1),
-				triggerDeferErrorCh: make(chan *deferError, 1),
-				currentTerm:         r.getCurrentTerm(),
-				nextIndex:           lastIdx + 1,
-				lastContact:         time.Now(),
-				notify:              make(map[*verifyFuture]struct{}),
-				notifyCh:            make(chan struct{}, 1),
-				stepDown:            r.leaderState.stepDown,
+				peer:                         server,
+				commitment:                   r.leaderState.commitment,
+				stopCh:                       make(chan uint64, 1),
+				triggerForLeaderCh:           make(chan struct{}, 1),
+				triggerForLeaderDeferErrorCh: make(chan *deferError, 1),
+				currentTerm:                  r.getCurrentTerm(),
+				nextIndex:                    lastIdx + 1,
+				lastContact:                  time.Now(),
+				notify:                       make(map[*verifyFuture]struct{}),
+				notifyCh:                     make(chan struct{}, 1),
+				stepDown:                     r.leaderState.stepDown,
 			}
 
 			r.leaderState.replState[server.ID] = s
-			r.goFunc(func() { r.replicate(s) })
-			asyncNotifyCh(s.triggerCh)
+			r.goFunc(func() { r.replicateForLeader(s) })
+			asyncNotifyCh(s.triggerForLeaderCh)
 			r.observe(PeerObservation{Peer: server, Removed: false})
 		} else if ok {
 
@@ -1304,7 +1305,7 @@ func (r *Raft) groupLeaderLoop() {
 			//领导权转移
 			r.setGroupLeadershipTransferInProgress(true)
 			//go r.leadershipTransfer(*id, *address, state, stopCh, doneCh)
-			go r.groupLeadershipTransfer(*id, *address, state, stopCh, doneCh)
+			go r.groupleadershipTransfer(*id, *address, state, stopCh, doneCh)
 
 		//提交日志
 		case <-r.groupLeaderState.commitCh:
@@ -1455,7 +1456,7 @@ func (r *Raft) groupLeaderLoop() {
 					ready[i].respond(ErrNotLeader)
 				}
 			} else {
-				r.dispatchLogs(ready)
+				r.dispatchLogsForGroupLeader(ready)
 			}
 
 		case <-lease:
@@ -1793,7 +1794,7 @@ func (r *Raft) leaderLoop() {
 					ready[i].respond(ErrNotLeader)
 				}
 			} else {
-				r.dispatchLogs(ready)
+				r.dispatchLogsForLeader(ready)
 			}
 
 		case <-lease:
@@ -1891,7 +1892,7 @@ func (r *Raft) groupleadershipTransfer(id ServerID, address ServerAddress, repl 
 	for atomic.LoadUint64(&repl.nextIndex) <= r.getLastIndex() {
 		err := &deferError{}
 		err.init()
-		repl.triggerDeferErrorCh <- err
+		repl.triggerForGroupLeaderDeferErrorCh <- err
 		select {
 		case err := <-err.errCh:
 			if err != nil {
@@ -1934,51 +1935,7 @@ func (r *Raft) leadershipTransfer(id ServerID, address ServerAddress, repl *foll
 	for atomic.LoadUint64(&repl.nextIndex) <= r.getLastIndex() {
 		err := &deferError{}
 		err.init()
-		repl.triggerDeferErrorCh <- err
-		select {
-		case err := <-err.errCh:
-			if err != nil {
-				doneCh <- err
-				return
-			}
-		case <-stopCh:
-			doneCh <- nil
-			return
-		}
-	}
-
-	// Step ?: the thesis describes in chap 6.4.1: Using clocks to reduce
-	// messaging for read-only queries. If this is implemented, the lease
-	// has to be reset as well, in case leadership is transferred. This
-	// implementation also has a lease, but it serves another purpose and
-	// doesn't need to be reset. The lease mechanism in our raft lib, is
-	// setup in a similar way to the one in the thesis, but in practice
-	// it's a timer that just tells the leader how often to check
-	// heartbeats are still coming in.
-
-	// Step 3: send TimeoutNow message to target server.
-	err := r.trans.TimeoutNow(id, address, &TimeoutNowRequest{RPCHeader: r.getRPCHeader()}, &TimeoutNowResponse{})
-	if err != nil {
-		err = fmt.Errorf("failed to make TimeoutNow RPC to %v: %v", id, err)
-	}
-	doneCh <- err
-}
-
-// TODO
-// leadershipTransfer is doing the heavy lifting for the leadership transfer.
-func (r *Raft) groupLeadershipTransfer(id ServerID, address ServerAddress, repl *followerReplication, stopCh chan struct{}, doneCh chan error) {
-	// make sure we are not already stopped
-	select {
-	case <-stopCh:
-		doneCh <- nil
-		return
-	default:
-	}
-
-	for atomic.LoadUint64(&repl.nextIndex) <= r.getLastIndex() {
-		err := &deferError{}
-		err.init()
-		repl.triggerDeferErrorCh <- err
+		repl.triggerForLeaderDeferErrorCh <- err
 		select {
 		case err := <-err.errCh:
 			if err != nil {
@@ -2283,16 +2240,25 @@ func (r *Raft) appendConfigurationEntry(future *configurationChangeFuture) {
 			Data: EncodeConfiguration(configuration),
 		}
 	}
+	if r.getState() == GroupLeader {
+		r.dispatchLogsForGroupLeader([]*logFuture{&future.logFuture})
+	} else if r.getState() == Leader {
+		r.dispatchLogsForLeader([]*logFuture{&future.logFuture})
+	}
 
-	r.dispatchLogs([]*logFuture{&future.logFuture})
 	index := future.Index()
 	r.setLatestConfiguration(configuration, index)
 	r.leaderState.commitment.setConfiguration(configuration)
-	r.startStopReplication()
+	if r.getState() == GroupLeader {
+		r.startStopReplicationForGroupLeader()
+	} else if r.getState() == Leader {
+		r.startStopReplicationForLeader()
+	}
 }
 
 // dispatchLog is called on the leader to push a log to disk, mark it
 // as inflight and begin replication of it.
+/*
 func (r *Raft) dispatchLogs(applyLogs []*logFuture) {
 	now := time.Now()
 	defer metrics.MeasureSince([]string{"raft", "leader", "dispatchLog"}, now)
@@ -2331,6 +2297,92 @@ func (r *Raft) dispatchLogs(applyLogs []*logFuture) {
 	// Notify the replicators of the new log
 	for _, f := range r.leaderState.replState {
 		asyncNotifyCh(f.triggerCh)
+	}
+}
+*/
+// dispatchLog is called on the leader to push a log to disk, mark it
+// as inflight and begin replication of it.
+func (r *Raft) dispatchLogsForLeader(applyLogs []*logFuture) {
+	now := time.Now()
+	defer metrics.MeasureSince([]string{"raft", "leader", "dispatchLog"}, now)
+
+	term := r.getCurrentTerm()
+	lastIndex := r.getLastIndex()
+
+	n := len(applyLogs)
+	logs := make([]*Log, n)
+	metrics.SetGauge([]string{"raft", "leader", "dispatchNumLogs"}, float32(n))
+
+	for idx, applyLog := range applyLogs {
+		applyLog.dispatch = now
+		lastIndex++
+		applyLog.log.Index = lastIndex
+		applyLog.log.Term = term
+		applyLog.log.AppendedAt = now
+		logs[idx] = &applyLog.log
+		r.leaderState.inflight.PushBack(applyLog)
+	}
+
+	// Write the log entry locally
+	if err := r.logs.StoreLogs(logs); err != nil {
+		r.logger.Error("failed to commit logs", "error", err)
+		for _, applyLog := range applyLogs {
+			applyLog.respond(err)
+		}
+		r.setState(GroupLeader)
+		return
+	}
+	r.leaderState.commitment.match(r.localID, lastIndex)
+
+	// Update the last log since it's on disk now
+	r.setLastLog(lastIndex, term)
+
+	// Notify the replicators of the new log
+	for _, f := range r.leaderState.replState {
+		asyncNotifyCh(f.triggerForLeaderCh)
+	}
+}
+
+// dispatchLog is called on the leader to push a log to disk, mark it
+// as inflight and begin replication of it.
+func (r *Raft) dispatchLogsForGroupLeader(applyLogs []*logFuture) {
+	now := time.Now()
+	defer metrics.MeasureSince([]string{"raft", "leader", "dispatchLog"}, now)
+
+	term := r.getCurrentTerm()
+	lastIndex := r.getLastIndex()
+
+	n := len(applyLogs)
+	logs := make([]*Log, n)
+	metrics.SetGauge([]string{"raft", "leader", "dispatchNumLogs"}, float32(n))
+
+	for idx, applyLog := range applyLogs {
+		applyLog.dispatch = now
+		lastIndex++
+		applyLog.log.Index = lastIndex
+		applyLog.log.Term = term
+		applyLog.log.AppendedAt = now
+		logs[idx] = &applyLog.log
+		r.groupLeaderState.inflight.PushBack(applyLog)
+	}
+
+	// Write the log entry locally
+	if err := r.logs.StoreLogs(logs); err != nil {
+		r.logger.Error("failed to commit logs", "error", err)
+		for _, applyLog := range applyLogs {
+			applyLog.respond(err)
+		}
+		r.setState(GroupFollower)
+		return
+	}
+	r.groupLeaderState.commitment.match(r.localID, lastIndex)
+
+	// Update the last log since it's on disk now
+	r.setLastLog(lastIndex, term)
+
+	// Notify the replicators of the new log
+	for _, f := range r.groupLeaderState.replState {
+		asyncNotifyCh(f.triggerForGroupLeaderCh)
 	}
 }
 
@@ -2516,11 +2568,20 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 	}
 
 	// Save the current leader
-	if len(a.Addr) > 0 {
-		r.setLeader(r.trans.DecodePeer(a.Addr), ServerID(a.ID))
-	} else {
-		r.setLeader(r.trans.DecodePeer(a.Leader), ServerID(a.ID))
+	if r.getState() == GroupFollower {
+		if len(a.Addr) > 0 {
+			r.setGroupLeader(r.trans.DecodePeer(a.Addr), ServerID(a.ID))
+		} else {
+			r.setGroupLeader(r.trans.DecodePeer(a.Leader), ServerID(a.ID))
+		}
+	} else if r.getState() == GroupLeader {
+		if len(a.Addr) > 0 {
+			r.setLeader(r.trans.DecodePeer(a.Addr), ServerID(a.ID))
+		} else {
+			r.setLeader(r.trans.DecodePeer(a.Leader), ServerID(a.ID))
+		}
 	}
+
 	// Verify the last log entry
 	if a.PrevLogEntry > 0 {
 		lastIdx, lastTerm := r.getLastEntry()

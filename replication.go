@@ -60,11 +60,18 @@ type followerReplication struct {
 	stopCh chan uint64
 
 	// triggerCh is notified every time new entries are appended to the log.
-	triggerCh chan struct{}
+	triggerForLeaderCh chan struct{}
 
 	// triggerDeferErrorCh is used to provide a backchannel. By sending a
 	// deferErr, the sender can be notifed when the replication is done.
-	triggerDeferErrorCh chan *deferError
+	triggerForLeaderDeferErrorCh chan *deferError
+
+	// triggerCh is notified every time new entries are appended to the log.
+	triggerForGroupLeaderCh chan struct{}
+
+	// triggerDeferErrorCh is used to provide a backchannel. By sending a
+	// deferErr, the sender can be notifed when the replication is done.
+	triggerForGroupLeaderDeferErrorCh chan *deferError
 
 	// lastContact is updated to the current time whenever any response is
 	// received from the follower (successful or not). This is used to check
@@ -134,7 +141,7 @@ func (s *followerReplication) setLastContact() {
 
 // replicate is a long running routine that replicates log entries to a single
 // follower.
-func (r *Raft) replicate(s *followerReplication) {
+func (r *Raft) replicateForLeader(s *followerReplication) {
 	// Start an async heartbeating routing
 	stopHeartbeat := make(chan struct{})
 	defer close(stopHeartbeat)
@@ -150,7 +157,7 @@ RPC:
 				r.replicateTo(s, maxIndex)
 			}
 			return
-		case deferErr := <-s.triggerDeferErrorCh:
+		case deferErr := <-s.triggerForLeaderDeferErrorCh:
 			lastLogIdx, _ := r.getLastLog()
 			shouldStop = r.replicateTo(s, lastLogIdx)
 			if !shouldStop {
@@ -158,7 +165,7 @@ RPC:
 			} else {
 				deferErr.respond(fmt.Errorf("replication failed"))
 			}
-		case <-s.triggerCh:
+		case <-s.triggerForLeaderCh:
 			lastLogIdx, _ := r.getLastLog()
 			shouldStop = r.replicateTo(s, lastLogIdx)
 		// This is _not_ our heartbeat mechanism but is to ensure
@@ -185,7 +192,71 @@ PIPELINE:
 	// Replicates using a pipeline for high performance. This method
 	// is not able to gracefully recover from errors, and so we fall back
 	// to standard mode on failure.
-	if err := r.pipelineReplicate(s); err != nil {
+	if err := r.pipelineReplicateForLeader(s); err != nil {
+		if err != ErrPipelineReplicationNotSupported {
+			s.peerLock.RLock()
+			peer := s.peer
+			s.peerLock.RUnlock()
+			r.logger.Error("failed to start pipeline replication to", "peer", peer, "error", err)
+		}
+	}
+	goto RPC
+}
+
+// replicate is a long running routine that replicates log entries to a single
+// follower.
+func (r *Raft) replicateForGroupLeader(s *followerReplication) {
+	// Start an async heartbeating routing
+	stopHeartbeat := make(chan struct{})
+	defer close(stopHeartbeat)
+	r.goFunc(func() { r.heartbeat(s, stopHeartbeat) })
+
+RPC:
+	shouldStop := false
+	for !shouldStop {
+		select {
+		case maxIndex := <-s.stopCh:
+			// Make a best effort to replicate up to this index
+			if maxIndex > 0 {
+				r.replicateTo(s, maxIndex)
+			}
+			return
+		case deferErr := <-s.triggerForGroupLeaderDeferErrorCh:
+			lastLogIdx, _ := r.getLastLog()
+			shouldStop = r.replicateTo(s, lastLogIdx)
+			if !shouldStop {
+				deferErr.respond(nil)
+			} else {
+				deferErr.respond(fmt.Errorf("replication failed"))
+			}
+		case <-s.triggerForGroupLeaderCh:
+			lastLogIdx, _ := r.getLastLog()
+			shouldStop = r.replicateTo(s, lastLogIdx)
+		// This is _not_ our heartbeat mechanism but is to ensure
+		// followers quickly learn the leader's commit index when
+		// raft commits stop flowing naturally. The actual heartbeats
+		// can't do this to keep them unblocked by disk IO on the
+		// follower. See https://github.com/hashicorp/raft/issues/282.
+		case <-randomTimeout(r.config().CommitTimeout):
+			lastLogIdx, _ := r.getLastLog()
+			shouldStop = r.replicateTo(s, lastLogIdx)
+		}
+
+		// If things looks healthy, switch to pipeline mode
+		if !shouldStop && s.allowPipeline {
+			goto PIPELINE
+		}
+	}
+	return
+
+PIPELINE:
+	// Disable until re-enabled
+	s.allowPipeline = false
+
+	// Replicates using a pipeline for high performance. This method
+	// is not able to gracefully recover from errors, and so we fall back
+	// to standard mode on failure.
+	if err := r.pipelineReplicateForGroupLeader(s); err != nil {
 		if err != ErrPipelineReplicationNotSupported {
 			s.peerLock.RLock()
 			peer := s.peer
@@ -434,7 +505,7 @@ func (r *Raft) heartbeat(s *followerReplication, stopCh chan struct{}) {
 // and want to switch to a higher performance pipeline mode of replication.
 // We only pipeline AppendEntries commands, and if we ever hit an error, we fall
 // back to the standard replication which can handle more complex situations.
-func (r *Raft) pipelineReplicate(s *followerReplication) error {
+func (r *Raft) pipelineReplicateForLeader(s *followerReplication) error {
 	s.peerLock.RLock()
 	peer := s.peer
 	s.peerLock.RUnlock()
@@ -472,7 +543,7 @@ SEND:
 				r.pipelineSend(s, pipeline, &nextIndex, maxIndex)
 			}
 			break SEND
-		case deferErr := <-s.triggerDeferErrorCh:
+		case deferErr := <-s.triggerForLeaderDeferErrorCh:
 			lastLogIdx, _ := r.getLastLog()
 			shouldStop = r.pipelineSend(s, pipeline, &nextIndex, lastLogIdx)
 			if !shouldStop {
@@ -480,7 +551,75 @@ SEND:
 			} else {
 				deferErr.respond(fmt.Errorf("replication failed"))
 			}
-		case <-s.triggerCh:
+		case <-s.triggerForLeaderCh:
+			lastLogIdx, _ := r.getLastLog()
+			shouldStop = r.pipelineSend(s, pipeline, &nextIndex, lastLogIdx)
+		case <-randomTimeout(r.config().CommitTimeout):
+			lastLogIdx, _ := r.getLastLog()
+			shouldStop = r.pipelineSend(s, pipeline, &nextIndex, lastLogIdx)
+		}
+	}
+
+	// Stop our decoder, and wait for it to finish
+	close(stopCh)
+	select {
+	case <-finishCh:
+	case <-r.shutdownCh:
+	}
+	return nil
+}
+
+// pipelineReplicate is used when we have synchronized our state with the follower,
+// and want to switch to a higher performance pipeline mode of replication.
+// We only pipeline AppendEntries commands, and if we ever hit an error, we fall
+// back to the standard replication which can handle more complex situations.
+func (r *Raft) pipelineReplicateForGroupLeader(s *followerReplication) error {
+	s.peerLock.RLock()
+	peer := s.peer
+	s.peerLock.RUnlock()
+
+	// Create a new pipeline
+	pipeline, err := r.trans.AppendEntriesPipeline(peer.ID, peer.Address)
+	if err != nil {
+		return err
+	}
+	defer pipeline.Close()
+
+	// Log start and stop of pipeline
+	r.logger.Info("pipelining replication", "peer", peer)
+	defer r.logger.Info("aborting pipeline replication", "peer", peer)
+
+	// Create a shutdown and finish channel
+	stopCh := make(chan struct{})
+	finishCh := make(chan struct{})
+
+	// Start a dedicated decoder
+	r.goFunc(func() { r.pipelineDecode(s, pipeline, stopCh, finishCh) })
+
+	// Start pipeline sends at the last good nextIndex
+	nextIndex := atomic.LoadUint64(&s.nextIndex)
+
+	shouldStop := false
+SEND:
+	for !shouldStop {
+		select {
+		case <-finishCh:
+			break SEND
+		case maxIndex := <-s.stopCh:
+			// Make a best effort to replicate up to this index
+			if maxIndex > 0 {
+				r.pipelineSend(s, pipeline, &nextIndex, maxIndex)
+			}
+			break SEND
+		case deferErr := <-s.triggerForLeaderDeferErrorCh:
+			lastLogIdx, _ := r.getLastLog()
+			shouldStop = r.pipelineSend(s, pipeline, &nextIndex, lastLogIdx)
+			if !shouldStop {
+				deferErr.respond(nil)
+			} else {
+				deferErr.respond(fmt.Errorf("replication failed"))
+			}
+		case <-s.triggerForLeaderCh:
 			lastLogIdx, _ := r.getLastLog()
 			shouldStop = r.pipelineSend(s, pipeline, &nextIndex, lastLogIdx)
 		case <-randomTimeout(r.config().CommitTimeout):
