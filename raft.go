@@ -194,8 +194,8 @@ func (r *Raft) run() {
 			r.runGroupCandidate()
 		case GroupLeader:
 			r.runGroupLeader()
-		case Follower:
-			r.runFollower()
+		// case Follower:
+		// 	r.runFollower()
 		case Candidate:
 			r.runCandidate()
 		case Leader:
@@ -314,6 +314,7 @@ func (r *Raft) runGroupFollower() {
 }
 
 // runFollower runs the main loop while in the follower state.
+/*
 func (r *Raft) runFollower() {
 	didWarn := false
 	//leaderAddr, leaderID := r.LeaderWithID()
@@ -413,7 +414,7 @@ func (r *Raft) runFollower() {
 		}
 	}
 }
-
+*/
 // liveBootstrap attempts to seed an initial configuration for the cluster. See
 // the Raft object's member BootstrapCluster for more details. This must only be
 // called on the main thread, and only makes sense in the follower state.
@@ -2560,9 +2561,13 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 
 	// Increase the term if we see a newer one, also transition to follower
 	// if we ever get an appendEntries call
-	if a.Term > r.getCurrentTerm() || (r.getState() != Follower && !r.candidateFromLeadershipTransfer.Load()) {
+	if a.Term > r.getCurrentTerm() || (!r.candidateFromLeadershipTransfer.Load()) {
 		// Ensure transition to follower
-		r.setState(GroupFollower)
+		if r.getState() == Leader {
+			r.setState(GroupLeader)
+		} else if r.getState() == GroupLeader {
+			r.setState(GroupFollower)
+		}
 		r.setCurrentTerm(a.Term)
 		resp.Term = a.Term
 	}

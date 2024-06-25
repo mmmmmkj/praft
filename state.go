@@ -17,9 +17,6 @@ const (
 	// GroupFollower is the initial state of a Raft node.
 	GroupFollower RaftState = iota
 
-	// Follower is the initial state of a Raft node.
-	Follower
-
 	// Candidate is one of the valid states of a Raft node.
 	Candidate
 
@@ -37,8 +34,8 @@ const (
 
 func (s RaftState) String() string {
 	switch s {
-	case Follower:
-		return "Follower"
+	// case Follower:
+	// 	return "Follower"
 	case Candidate:
 		return "Candidate"
 	case Leader:
