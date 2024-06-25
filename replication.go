@@ -126,6 +126,7 @@ func (s *followerReplication) cleanNotify(v *verifyFuture) {
 
 // LastContact returns the time of last contact.
 func (s *followerReplication) LastContact() time.Time {
+
 	s.lastContactLock.RLock()
 	last := s.lastContact
 	s.lastContactLock.RUnlock()
