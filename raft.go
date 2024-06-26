@@ -1048,7 +1048,7 @@ func (r *Raft) startStopReplicationForGroupLeader() {
 				peer:                              server,
 				commitment:                        r.groupLeaderState.commitment,
 				stopCh:                            make(chan uint64, 1),
-				triggerForLeaderCh:                make(chan struct{}, 1),
+				triggerForLeaderCh:                make(chan struct{}, 1),r.groupLeaderState.replState[server.ID] = s
 				triggerForLeaderDeferErrorCh:      make(chan *deferError, 1),
 				triggerForGroupLeaderCh:           make(chan struct{}, 1),
 				triggerForGroupLeaderDeferErrorCh: make(chan *deferError, 1),
@@ -1059,7 +1059,7 @@ func (r *Raft) startStopReplicationForGroupLeader() {
 				notifyCh:                          make(chan struct{}, 1),
 				stepDown:                          r.groupLeaderState.stepDown,
 			}
-
+			//r.logger.Info("r.groupLeaderState.replState[server.ID] = s", "peer", server.ID)
 			r.groupLeaderState.replState[server.ID] = s
 			r.goFunc(func() { r.replicateForGroupLeader(s) })
 			asyncNotifyCh(s.triggerForGroupLeaderCh)
@@ -1132,7 +1132,7 @@ func (r *Raft) startStopReplicationForLeader() {
 				notifyCh:                          make(chan struct{}, 1),
 				stepDown:                          r.leaderState.stepDown,
 			}
-			r.logger.Debug("added peer, starting replication", "peer", server.ID)
+			r.logger.Debug("r.leaderState.replState[server.ID] = s", server.ID)
 			r.leaderState.replState[server.ID] = s
 			r.goFunc(func() { r.replicateForLeader(s) })
 			asyncNotifyCh(s.triggerForLeaderCh)
@@ -1989,18 +1989,13 @@ func (r *Raft) checkLeaderLease() time.Duration {
 	// Check each follower
 	var maxDiff time.Duration
 	now := time.Now()
-	for _, server := range r.configurations.latest.ServersInGroup[r.groupId] {
+	for _, server := range r.configurations.latest.ServersIsGroupLeader {
 		if server.Suffrage == Voter {
 			if server.ID == r.localID {
 				contacted++
 				continue
 			}
 			f := r.leaderState.replState[server.ID]
-
-			r.logger.Debug("checkLeaderLease", "server-id", server.ID)
-			r.logger.Debug("checkLeaderLease", "len(map)", len(r.leaderState.replState))
-			r.logger.Debug("checkLeaderLease", "lastContact", r.leaderState.replState[server.ID].lastContact)
-			r.logger.Debug("checkLeaderLease", "lock", r.leaderState.replState[server.ID].lastContactLock.TryLock())
 			diff := now.Sub(f.LastContact())
 			if diff <= leaseTimeout {
 				contacted++
