@@ -762,50 +762,9 @@ func (r *Raft) runGroupLeader() {
 	// Cleanup state on step down
 	defer func() {
 		close(stopCh)
-
-		// Since we were the leader previously, we update our
-		// last contact time when we step down, so that we are not
-		// reporting a last contact time from before we were the
-		// leader. Otherwise, to a client it would seem our data
-		// is extremely stale.
-		r.setLastContact()
-
-		// Stop replication
-		for _, p := range r.groupLeaderState.replState {
-			close(p.stopCh)
+		if r.getState() == GroupCandidate || r.getState() == GroupFollower {
+			r.exitGroupLeader()
 		}
-
-		// Respond to all inflight operations
-		for e := r.groupLeaderState.inflight.Front(); e != nil; e = e.Next() {
-			e.Value.(*logFuture).respond(ErrLeadershipLost)
-		}
-
-		// Respond to any pending verify requests
-		for future := range r.groupLeaderState.notify {
-			future.respond(ErrLeadershipLost)
-		}
-
-		// Clear all the state
-		r.groupLeaderState.commitCh = nil
-		r.groupLeaderState.commitment = nil
-		r.groupLeaderState.inflight = nil
-		r.groupLeaderState.replState = nil
-		r.groupLeaderState.notify = nil
-		r.groupLeaderState.stepDown = nil
-
-		// If we are stepping down for some reason, no known leader.
-		// We may have stepped down due to an RPC call, which would
-		// provide the leader, so we cannot always blank this out.
-		r.groupLeaderLock.Lock()
-		if r.groupLeaderAddr == r.localAddr && r.groupLeaderID == r.localID {
-			r.groupLeaderAddr = ""
-			r.groupLeaderID = ""
-		}
-		r.groupLeaderLock.Unlock()
-
-		// Notify that we are not the leader
-		overrideNotifyBool(r.groupLeaderCh, false)
-
 		// Push to the notify channel if given
 		if notify != nil {
 			select {
@@ -837,6 +796,47 @@ func (r *Raft) runGroupLeader() {
 	// Sit in the leader loop until we step down
 	r.logger.Debug("groupLeaderLoop begin")
 	r.groupLeaderLoop()
+}
+
+func (r *Raft) exitGroupLeader() {
+	r.setLastContact()
+
+	// Stop replication
+	for _, p := range r.groupLeaderState.replState {
+		close(p.stopCh)
+	}
+
+	// Respond to all inflight operations
+	for e := r.groupLeaderState.inflight.Front(); e != nil; e = e.Next() {
+		e.Value.(*logFuture).respond(ErrLeadershipLost)
+	}
+
+	// Respond to any pending verify requests
+	for future := range r.groupLeaderState.notify {
+		future.respond(ErrLeadershipLost)
+	}
+
+	// Clear all the state
+	r.groupLeaderState.commitCh = nil
+	r.groupLeaderState.commitment = nil
+	r.groupLeaderState.inflight = nil
+	r.groupLeaderState.replState = nil
+	r.groupLeaderState.notify = nil
+	r.groupLeaderState.stepDown = nil
+
+	// If we are stepping down for some reason, no known leader.
+	// We may have stepped down due to an RPC call, which would
+	// provide the leader, so we cannot always blank this out.
+	r.groupLeaderLock.Lock()
+	if r.groupLeaderAddr == r.localAddr && r.groupLeaderID == r.localID {
+		r.groupLeaderAddr = ""
+		r.groupLeaderID = ""
+	}
+	r.groupLeaderLock.Unlock()
+
+	// Notify that we are not the leader
+	overrideNotifyBool(r.groupLeaderCh, false)
+
 }
 
 // runLeader runs the main loop while in leader state. Do the setup here and drop into
