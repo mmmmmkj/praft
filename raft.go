@@ -178,6 +178,7 @@ func (r *Raft) requestConfigChange(req configurationChangeRequest, timeout time.
 func (r *Raft) run() {
 	for {
 		// Check if we are doing a shutdown
+		r.logger.Debug("run", "state", r.getState())
 		select {
 		case <-r.shutdownCh:
 			// Clear the leader to prevent forwarding
@@ -2234,6 +2235,8 @@ func (r *Raft) appendConfigurationEntryForLeader(future *configurationChangeFutu
 		"server-addr", future.req.serverAddress,
 		"servers", hclog.Fmt("%+v", configuration.Servers))
 
+	r.logger.Info("updating configuration",
+		"serversInGroup", hclog.Fmt("%+v", configuration.ServersInGroup[r.groupId]))
 	// In pre-ID compatibility mode we translate all configuration changes
 	// in to an old remove peer message, which can handle all supported
 	// cases for peer changes in the pre-ID world (adding and removing
@@ -2258,7 +2261,10 @@ func (r *Raft) appendConfigurationEntryForLeader(future *configurationChangeFutu
 	index := future.Index()
 	r.setLatestConfiguration(configuration, index)
 	r.leaderState.commitment.setConfiguration(configuration)
+	r.logger.Info("r.startStopReplicationForLeader")
+	r.startStopReplicationForGroupLeader()
 	r.startStopReplicationForLeader()
+
 }
 
 // appendConfigurationEntry changes the configuration and adds a new

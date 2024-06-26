@@ -301,7 +301,7 @@ func nextConfiguration(current Configuration, currentIndex uint64, change config
 		} else {
 			configuration.ServersInGroup[groupId] = []Server{newServer}
 		}
-
+		found = false
 		for i, server := range configuration.Servers {
 			if server.ID == change.serverID {
 				if server.Suffrage == Voter {
