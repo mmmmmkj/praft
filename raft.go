@@ -1425,7 +1425,7 @@ func (r *Raft) groupLeaderLoop() {
 				future.respond(ErrLeadershipTransferInProgress)
 				continue
 			}
-			r.appendConfigurationEntry(future)
+			r.appendConfigurationEntryForGroupLeader(future)
 
 		case b := <-r.bootstrapCh:
 			r.mainThreadSaturation.working()
@@ -1763,7 +1763,7 @@ func (r *Raft) leaderLoop() {
 				future.respond(ErrLeadershipTransferInProgress)
 				continue
 			}
-			r.appendConfigurationEntry(future)
+			r.appendConfigurationEntryForLeader(future)
 
 		case b := <-r.bootstrapCh:
 			r.mainThreadSaturation.working()
@@ -2216,7 +2216,7 @@ func (r *Raft) restoreUserSnapshot(meta *SnapshotMeta, reader io.Reader) error {
 // appendConfigurationEntry changes the configuration and adds a new
 // configuration entry to the log. This must only be called from the
 // main thread.
-func (r *Raft) appendConfigurationEntry(future *configurationChangeFuture) {
+func (r *Raft) appendConfigurationEntryForLeader(future *configurationChangeFuture) {
 	configuration, err := nextConfiguration(r.configurations.latest, r.configurations.latestIndex, future.req)
 	if err != nil {
 		future.respond(err)
@@ -2247,20 +2247,56 @@ func (r *Raft) appendConfigurationEntry(future *configurationChangeFuture) {
 			Data: EncodeConfiguration(configuration),
 		}
 	}
-	if r.getState() == GroupLeader {
-		r.dispatchLogsForGroupLeader([]*logFuture{&future.logFuture})
-	} else if r.getState() == Leader {
-		r.dispatchLogsForLeader([]*logFuture{&future.logFuture})
-	}
+
+	r.dispatchLogsForLeader([]*logFuture{&future.logFuture})
 
 	index := future.Index()
 	r.setLatestConfiguration(configuration, index)
 	r.leaderState.commitment.setConfiguration(configuration)
-	if r.getState() == GroupLeader {
-		r.startStopReplicationForGroupLeader()
-	} else if r.getState() == Leader {
-		r.startStopReplicationForLeader()
+	r.startStopReplicationForLeader()
+}
+
+// appendConfigurationEntry changes the configuration and adds a new
+// configuration entry to the log. This must only be called from the
+// main thread.
+func (r *Raft) appendConfigurationEntryForGroupLeader(future *configurationChangeFuture) {
+	configuration, err := nextConfiguration(r.configurations.latest, r.configurations.latestIndex, future.req)
+	if err != nil {
+		future.respond(err)
+		return
 	}
+
+	r.logger.Info("updating configuration",
+		"command", future.req.command,
+		"server-id", future.req.serverID,
+		"server-addr", future.req.serverAddress,
+		"servers", hclog.Fmt("%+v", configuration.Servers))
+
+	// In pre-ID compatibility mode we translate all configuration changes
+	// in to an old remove peer message, which can handle all supported
+	// cases for peer changes in the pre-ID world (adding and removing
+	// voters). Both add peer and remove peer log entries are handled
+	// similarly on old Raft servers, but remove peer does extra checks to
+	// see if a leader needs to step down. Since they both assert the full
+	// configuration, then we can safely call remove peer for everything.
+	if r.protocolVersion < 2 {
+		future.log = Log{
+			Type: LogRemovePeerDeprecated,
+			Data: encodePeers(configuration, r.trans),
+		}
+	} else {
+		future.log = Log{
+			Type: LogConfiguration,
+			Data: EncodeConfiguration(configuration),
+		}
+	}
+	r.dispatchLogsForGroupLeader([]*logFuture{&future.logFuture})
+
+	index := future.Index()
+	r.setLatestConfiguration(configuration, index)
+	r.groupLeaderState.commitment.setConfiguration(configuration)
+	r.startStopReplicationForGroupLeader()
+
 }
 
 // dispatchLog is called on the leader to push a log to disk, mark it
