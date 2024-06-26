@@ -1059,10 +1059,13 @@ func (r *Raft) startStopReplicationForGroupLeader() {
 				notifyCh:                          make(chan struct{}, 1),
 				stepDown:                          r.groupLeaderState.stepDown,
 			}
-			//r.logger.Info("r.groupLeaderState.replState[server.ID] = s", "peer", server.ID)
+			r.logger.Info("r.groupLeaderState.replState[server.ID] = s", "peer", server.ID)
 			r.groupLeaderState.replState[server.ID] = s
+			r.logger.Info("r.goFunc(func() { r.replicateForGroupLeader(s) })")
 			r.goFunc(func() { r.replicateForGroupLeader(s) })
+			r.logger.Info("asyncNotifyCh(s.triggerForGroupLeaderCh)")
 			asyncNotifyCh(s.triggerForGroupLeaderCh)
+			r.logger.Info("r.observe(PeerObservation{Peer: server, Removed: false})")
 			r.observe(PeerObservation{Peer: server, Removed: false})
 		} else if ok {
 
@@ -1078,7 +1081,7 @@ func (r *Raft) startStopReplicationForGroupLeader() {
 			}
 		}
 	}
-
+	r.logger.Info("for serverID, repl := range r.groupLeaderState.replState")
 	// Stop replication goroutines that need stopping
 	for serverID, repl := range r.groupLeaderState.replState {
 		if inConfig[serverID] {
