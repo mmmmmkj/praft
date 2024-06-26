@@ -1048,7 +1048,7 @@ func (r *Raft) startStopReplicationForGroupLeader() {
 				peer:                              server,
 				commitment:                        r.groupLeaderState.commitment,
 				stopCh:                            make(chan uint64, 1),
-				triggerForLeaderCh:                make(chan struct{}, 1),r.groupLeaderState.replState[server.ID] = s
+				triggerForLeaderCh:                make(chan struct{}, 1),
 				triggerForLeaderDeferErrorCh:      make(chan *deferError, 1),
 				triggerForGroupLeaderCh:           make(chan struct{}, 1),
 				triggerForGroupLeaderDeferErrorCh: make(chan *deferError, 1),
