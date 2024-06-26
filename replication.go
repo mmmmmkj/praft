@@ -128,11 +128,8 @@ func (s *followerReplication) cleanNotify(v *verifyFuture) {
 func (s *followerReplication) LastContact() time.Time {
 	print("(s *followerReplication) LastContact()")
 	s.lastContactLock.RLock()
-	print("s.lastContactLock.RLock()")
 	last := s.lastContact
-	print("last := s.lastContact")
 	s.lastContactLock.RUnlock()
-	print("s.lastContactLock.RUnlock()")
 	return last
 }
 

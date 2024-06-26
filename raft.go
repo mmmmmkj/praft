@@ -1047,6 +1047,8 @@ func (r *Raft) startStopReplicationForGroupLeader() {
 				peer:                              server,
 				commitment:                        r.groupLeaderState.commitment,
 				stopCh:                            make(chan uint64, 1),
+				triggerForLeaderCh:                make(chan struct{}, 1),
+				triggerForLeaderDeferErrorCh:      make(chan *deferError, 1),
 				triggerForGroupLeaderCh:           make(chan struct{}, 1),
 				triggerForGroupLeaderDeferErrorCh: make(chan *deferError, 1),
 				currentTerm:                       r.getCurrentTerm(),
@@ -1111,22 +1113,25 @@ func (r *Raft) startStopReplicationForLeader() {
 		inConfig[server.ID] = true
 
 		s, ok := r.leaderState.replState[server.ID]
+		r.logger.Debug("find peer", "ok=", ok, "peer", server.ID)
 		if !ok {
 			r.logger.Info("added peer, starting replication", "peer", server.ID)
 			s = &followerReplication{
-				peer:                         server,
-				commitment:                   r.leaderState.commitment,
-				stopCh:                       make(chan uint64, 1),
-				triggerForLeaderCh:           make(chan struct{}, 1),
-				triggerForLeaderDeferErrorCh: make(chan *deferError, 1),
-				currentTerm:                  r.getCurrentTerm(),
-				nextIndex:                    lastIdx + 1,
-				lastContact:                  time.Now(),
-				notify:                       make(map[*verifyFuture]struct{}),
-				notifyCh:                     make(chan struct{}, 1),
-				stepDown:                     r.leaderState.stepDown,
+				peer:                              server,
+				commitment:                        r.leaderState.commitment,
+				stopCh:                            make(chan uint64, 1),
+				triggerForLeaderCh:                make(chan struct{}, 1),
+				triggerForLeaderDeferErrorCh:      make(chan *deferError, 1),
+				triggerForGroupLeaderCh:           make(chan struct{}, 1),
+				triggerForGroupLeaderDeferErrorCh: make(chan *deferError, 1),
+				currentTerm:                       r.getCurrentTerm(),
+				nextIndex:                         lastIdx + 1,
+				lastContact:                       time.Now(),
+				notify:                            make(map[*verifyFuture]struct{}),
+				notifyCh:                          make(chan struct{}, 1),
+				stepDown:                          r.leaderState.stepDown,
 			}
-
+			r.logger.Debug("added peer, starting replication", "peer", server.ID)
 			r.leaderState.replState[server.ID] = s
 			r.goFunc(func() { r.replicateForLeader(s) })
 			asyncNotifyCh(s.triggerForLeaderCh)
