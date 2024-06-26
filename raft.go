@@ -1990,7 +1990,11 @@ func (r *Raft) checkLeaderLease() time.Duration {
 				continue
 			}
 			f := r.leaderState.replState[server.ID]
-			r.logger.Debug("checkLeaderLease", "server-id", server.ID, "lastContact", f.LastContact(), "state", r.getState())
+
+			r.logger.Debug("checkLeaderLease", "server-id", server.ID)
+			r.logger.Debug("checkLeaderLease", "len(map)", len(r.leaderState.replState))
+			r.logger.Debug("checkLeaderLease", "lastContact", r.leaderState.replState[server.ID].lastContact)
+			r.logger.Debug("checkLeaderLease", "lock", r.leaderState.replState[server.ID].lastContactLock.TryLock())
 			diff := now.Sub(f.LastContact())
 			if diff <= leaseTimeout {
 				contacted++
