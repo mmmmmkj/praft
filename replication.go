@@ -291,47 +291,50 @@ START:
 	peer = s.peer
 	s.peerLock.RUnlock()
 
-	// Setup the request
-	if err := r.setupAppendEntries(s, &req, atomic.LoadUint64(&s.nextIndex), lastIndex); err == ErrLogNotFound {
-		goto SEND_SNAP
-	} else if err != nil {
-		return
-	}
+	if (r.getState() == Leader && r.hasGroupLeader(peer.ID, peer.Address)) || (r.getState() == GroupLeader && r.hasGroupFollower(peer.ID, peer.Address)) {
 
-	// Make the RPC call
-	start = time.Now()
-	if err := r.trans.AppendEntries(peer.ID, peer.Address, &req, &resp); err != nil {
-		r.logger.Error("failed to appendEntries to", "peer", peer, "error", err)
-		s.failures++
-		return
-	}
-	appendStats(string(peer.ID), start, float32(len(req.Entries)))
-
-	// Check for a newer term, stop running
-	if resp.Term > req.Term {
-		r.handleStaleTerm(s)
-		return true
-	}
-
-	// Update the last contact
-	s.setLastContact()
-
-	// Update s based on success
-	if resp.Success {
-		// Update our replication state
-		updateLastAppended(s, &req)
-
-		// Clear any failures, allow pipelining
-		s.failures = 0
-		s.allowPipeline = true
-	} else {
-		atomic.StoreUint64(&s.nextIndex, max(min(s.nextIndex-1, resp.LastLog+1), 1))
-		if resp.NoRetryBackoff {
-			s.failures = 0
-		} else {
-			s.failures++
+		// Setup the request
+		if err := r.setupAppendEntries(s, &req, atomic.LoadUint64(&s.nextIndex), lastIndex); err == ErrLogNotFound {
+			goto SEND_SNAP
+		} else if err != nil {
+			return
 		}
-		r.logger.Warn("appendEntries rejected, sending older logs", "peer", peer, "next", atomic.LoadUint64(&s.nextIndex))
+
+		// Make the RPC call
+		start = time.Now()
+		if err := r.trans.AppendEntries(peer.ID, peer.Address, &req, &resp); err != nil {
+			r.logger.Error("failed to appendEntries to", "peer", peer, "error", err)
+			s.failures++
+			return
+		}
+		appendStats(string(peer.ID), start, float32(len(req.Entries)))
+
+		// Check for a newer term, stop running
+		if resp.Term > req.Term {
+			r.handleStaleTerm(s)
+			return true
+		}
+
+		// Update the last contact
+		s.setLastContact()
+
+		// Update s based on success
+		if resp.Success {
+			// Update our replication state
+			updateLastAppended(s, &req)
+
+			// Clear any failures, allow pipelining
+			s.failures = 0
+			s.allowPipeline = true
+		} else {
+			atomic.StoreUint64(&s.nextIndex, max(min(s.nextIndex-1, resp.LastLog+1), 1))
+			if resp.NoRetryBackoff {
+				s.failures = 0
+			} else {
+				s.failures++
+			}
+			r.logger.Warn("appendEntries rejected, sending older logs", "peer", peer, "next", atomic.LoadUint64(&s.nextIndex))
+		}
 	}
 
 CHECK_MORE:

@@ -90,16 +90,6 @@ type Raft struct {
 	// be committed and applied to the FSM.
 	applyCh chan *logFuture
 
-	// applyCh is used to async send logs to the main thread to
-	// be committed and applied to the FSM.
-	applyForLeaderCh chan *logFuture
-
-	// applyCh is used to async send logs to the main thread to
-	// be committed and applied to the FSM.
-	applyForGroupLeaderCh chan *logFuture
-	// conf stores the current configuration to use. This is the most recent one
-	// provided. All reads of config values should use the config() helper method
-	// to read this safely.
 	conf atomic.Value
 
 	// confReloadMu ensures that only one thread can reload config at once since
@@ -567,20 +557,14 @@ func NewRaft(conf *Config, fsm FSM, logs LogStore, stable StableStore, snaps Sna
 
 	// Buffer applyCh to MaxAppendEntries if the option is enabled
 	applyCh := make(chan *logFuture)
-	applyForLeaderCh := make(chan *logFuture)
-	applyForGroupLeaderCh := make(chan *logFuture)
 	if conf.BatchApplyCh {
 		applyCh = make(chan *logFuture, conf.MaxAppendEntries)
-		applyForLeaderCh = make(chan *logFuture, conf.MaxAppendEntries)
-		applyForGroupLeaderCh = make(chan *logFuture, conf.MaxAppendEntries)
 	}
 
 	// Create Raft struct.
 	r := &Raft{
 		protocolVersion:           protocolVersion,
 		applyCh:                   applyCh,
-		applyForLeaderCh:          applyForLeaderCh,
-		applyForGroupLeaderCh:     applyForGroupLeaderCh,
 		fsm:                       fsm,
 		fsmMutateCh:               make(chan interface{}, 128),
 		fsmSnapshotCh:             make(chan *reqSnapshotFuture),

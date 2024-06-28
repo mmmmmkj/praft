@@ -231,16 +231,6 @@ func (r *Raft) runGroupFollower() {
 			// Reject any operations since we are not the leader
 			a.respond(ErrNotLeader)
 
-		case a := <-r.applyForLeaderCh:
-			r.mainThreadSaturation.working()
-			// Reject any operations since we are not the leader
-			a.respond(ErrNotLeader)
-
-		case a := <-r.applyForGroupLeaderCh:
-			r.mainThreadSaturation.working()
-			// Reject any operations since we are not the leader
-			a.respond(ErrNotLeader)
-
 		case v := <-r.verifyCh:
 			r.mainThreadSaturation.working()
 			// Reject any operations since we are not the leader
@@ -521,16 +511,6 @@ func (r *Raft) runGroupCandidate() {
 			// Reject any operations since we are not the leader
 			a.respond(ErrNotLeader)
 
-		case a := <-r.applyForLeaderCh:
-			r.mainThreadSaturation.working()
-			// Reject any operations since we are not the leader
-			a.respond(ErrNotLeader)
-
-		case a := <-r.applyForGroupLeaderCh:
-			r.mainThreadSaturation.working()
-			// Reject any operations since we are not the leader
-			a.respond(ErrNotLeader)
-
 		case v := <-r.verifyCh:
 			r.mainThreadSaturation.working()
 			// Reject any operations since we are not the leader
@@ -640,16 +620,6 @@ func (r *Raft) runCandidate() {
 			c.respond(ErrNotLeader)
 
 		case a := <-r.applyCh:
-			r.mainThreadSaturation.working()
-			// Reject any operations since we are not the leader
-			a.respond(ErrNotLeader)
-
-		case a := <-r.applyForLeaderCh:
-			r.mainThreadSaturation.working()
-			// Reject any operations since we are not the leader
-			a.respond(ErrNotLeader)
-
-		case a := <-r.applyForGroupLeaderCh:
 			r.mainThreadSaturation.working()
 			// Reject any operations since we are not the leader
 			a.respond(ErrNotLeader)
@@ -1470,39 +1440,40 @@ func (r *Raft) groupLeaderLoop() {
 			r.mainThreadSaturation.working()
 			b.respond(ErrCantBootstrap)
 
-		case a := <-r.applyForLeaderCh:
+		case a := <-r.applyCh:
 			r.mainThreadSaturation.working()
 			// Reject any operations since we are not the leader
 			a.respond(ErrNotLeader)
-		case newLog := <-r.applyForGroupLeaderCh:
-			r.mainThreadSaturation.working()
-			if r.getGroupLeadershipTransferInProgress() {
-				r.logger.Debug(ErrLeadershipTransferInProgress.Error())
-				newLog.respond(ErrLeadershipTransferInProgress)
-				continue
-			}
-			// Group commit, gather all the ready commits
-			ready := []*logFuture{newLog}
-		GROUP_COMMIT_LOOP:
-			for i := 0; i < r.config().MaxAppendEntries; i++ {
-				select {
-				case newLog := <-r.applyForGroupLeaderCh:
-					ready = append(ready, newLog)
-				default:
-					break GROUP_COMMIT_LOOP
-				}
-			}
+		// case newLog := <-r.applyForGroupLeaderCh:
 
-			// Dispatch the logs
-			if stepDown {
-				// we're in the process of stepping down as leader, don't process anything new
-				for i := range ready {
-					ready[i].respond(ErrNotLeader)
-				}
-			} else {
-				r.logger.Debug("dispatchLogsForGroupLeader begin")
-				r.dispatchLogsForGroupLeader(ready)
-			}
+		// 	r.mainThreadSaturation.working()
+		// 	if r.getGroupLeadershipTransferInProgress() {
+		// 		r.logger.Debug(ErrLeadershipTransferInProgress.Error())
+		// 		newLog.respond(ErrLeadershipTransferInProgress)
+		// 		continue
+		// 	}
+		// 	// Group commit, gather all the ready commits
+		// 	ready := []*logFuture{newLog}
+		// GROUP_COMMIT_LOOP:
+		// 	for i := 0; i < r.config().MaxAppendEntries; i++ {
+		// 		select {
+		// 		case newLog := <-r.applyForGroupLeaderCh:
+		// 			ready = append(ready, newLog)
+		// 		default:
+		// 			break GROUP_COMMIT_LOOP
+		// 		}
+		// 	}
+
+		// 	// Dispatch the logs
+		// 	if stepDown {
+		// 		// we're in the process of stepping down as leader, don't process anything new
+		// 		for i := range ready {
+		// 			ready[i].respond(ErrNotLeader)
+		// 		}
+		// 	} else {
+		// 		r.logger.Debug("dispatchLogsForGroupLeader begin")
+		// 		r.dispatchLogsForGroupLeader(ready)
+		// 	}
 
 		case <-lease:
 			r.mainThreadSaturation.working()
@@ -1812,12 +1783,8 @@ func (r *Raft) leaderLoop() {
 		case b := <-r.bootstrapCh:
 			r.mainThreadSaturation.working()
 			b.respond(ErrCantBootstrap)
-		case a := <-r.applyForGroupLeaderCh:
-			r.mainThreadSaturation.working()
-			// Reject any operations since we are not the leader
-			a.respond(ErrNotLeader)
 
-		case newLog := <-r.applyForLeaderCh:
+		case newLog := <-r.applyCh:
 			r.mainThreadSaturation.working()
 			if r.getLeadershipTransferInProgress() {
 				r.logger.Debug(ErrLeadershipTransferInProgress.Error())
@@ -1829,7 +1796,7 @@ func (r *Raft) leaderLoop() {
 		GROUP_COMMIT_LOOP:
 			for i := 0; i < r.config().MaxAppendEntries; i++ {
 				select {
-				case newLog := <-r.applyForLeaderCh:
+				case newLog := <-r.applyCh:
 					ready = append(ready, newLog)
 				default:
 					break GROUP_COMMIT_LOOP
@@ -1845,8 +1812,8 @@ func (r *Raft) leaderLoop() {
 			} else {
 				r.dispatchLogsForLeader(ready)
 			}
-			r.applyForGroupLeaderCh <- newLog
-			r.logger.Debug("applyForGroupLeaderCh <- newLog")
+			// r.applyForGroupLeaderCh <- newLog
+			// r.logger.Debug("applyForGroupLeaderCh <- newLog")
 
 		case <-lease:
 			r.mainThreadSaturation.working()
@@ -2478,6 +2445,24 @@ func (r *Raft) dispatchLogsForGroupLeader(applyLogs []*logFuture) {
 	}
 }
 
+func (r *Raft) hasGroupFollower(sid ServerID, saddr ServerAddress) bool {
+	for _, server := range r.configurations.latest.ServersInGroup[r.groupId] {
+		if server.Suffrage == Voter && server.ID == sid && server.Address == saddr {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Raft) hasGroupLeader(sid ServerID, saddr ServerAddress) bool {
+	for _, server := range r.configurations.latest.ServersIsGroupLeader {
+		if server.Suffrage == Voter && server.ID == sid && server.Address == saddr {
+			return true
+		}
+	}
+	return false
+}
+
 // processLogs is used to apply all the committed entries that haven't been
 // applied up to the given index limit.
 // This can be called from both leaders and followers.
@@ -2765,7 +2750,11 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 			last := newEntries[n-1]
 			r.setLastLog(last.Index, last.Term)
 		}
-
+		if r.getState() == GroupLeader || r.getState() == Leader {
+			for _, f := range r.groupLeaderState.replState {
+				asyncNotifyCh(f.triggerForLeaderCh)
+			}
+		}
 		metrics.MeasureSince([]string{"raft", "rpc", "appendEntries", "storeLogs"}, start)
 	}
 
