@@ -98,6 +98,7 @@ func (r *Raft) runFSM() {
 		switch req.log.Type {
 		case LogCommand:
 			start := time.Now()
+			r.logger.Debug("fsm.Apply", "log", req.log.Data)
 			resp = r.fsm.Apply(req.log)
 			metrics.MeasureSince([]string{"raft", "fsm", "apply"}, start)
 
@@ -234,7 +235,7 @@ func (r *Raft) runFSM() {
 		select {
 		case ptr := <-r.fsmMutateCh:
 			saturation.working()
-
+			r.logger.Debug("fsmMutateCh in", r.getState())
 			switch req := ptr.(type) {
 			case []*commitTuple:
 				applyBatch(req)

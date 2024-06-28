@@ -167,6 +167,7 @@ RPC:
 				deferErr.respond(fmt.Errorf("replication failed"))
 			}
 		case <-s.triggerForLeaderCh:
+			r.logger.Debug("get triggerForLeaderCh shouldStop = r.replicateTo(s, lastLogIdx)")
 			lastLogIdx, _ := r.getLastLog()
 			shouldStop = r.replicateTo(s, lastLogIdx)
 		// This is _not_ our heartbeat mechanism but is to ensure
@@ -223,6 +224,7 @@ RPC:
 			}
 			return
 		case deferErr := <-s.triggerForGroupLeaderDeferErrorCh:
+			r.logger.Debug("get triggerForGroupLeaderDeferErrorCh shouldStop = r.replicateTo(s, lastLogIdx)")
 			lastLogIdx, _ := r.getLastLog()
 			shouldStop = r.replicateTo(s, lastLogIdx)
 			if !shouldStop {
@@ -231,6 +233,7 @@ RPC:
 				deferErr.respond(fmt.Errorf("replication failed"))
 			}
 		case <-s.triggerForGroupLeaderCh:
+			r.logger.Debug("get triggerForGroupLeaderCh shouldStop = r.replicateTo(s, lastLogIdx)")
 			lastLogIdx, _ := r.getLastLog()
 			shouldStop = r.replicateTo(s, lastLogIdx)
 		// This is _not_ our heartbeat mechanism but is to ensure

@@ -1138,6 +1138,7 @@ func (r *Raft) startStopReplicationForLeader() {
 			r.logger.Debug("r.leaderState.replState[server.ID] = s", server.ID)
 			r.leaderState.replState[server.ID] = s
 			r.goFunc(func() { r.replicateForLeader(s) })
+			r.logger.Debug("asyncNotifyCh(s.triggerForLeaderCh) in ", r.getState())
 			asyncNotifyCh(s.triggerForLeaderCh)
 			r.observe(PeerObservation{Peer: server, Removed: false})
 		} else if ok {
@@ -2364,7 +2365,7 @@ func (r *Raft) dispatchLogs(applyLogs []*logFuture) {
 func (r *Raft) dispatchLogsForLeader(applyLogs []*logFuture) {
 	now := time.Now()
 	defer metrics.MeasureSince([]string{"raft", "leader", "dispatchLog"}, now)
-
+	r.logger.Debug("dispatchLogsForLeader begin in ", r.getState())
 	term := r.getCurrentTerm()
 	lastIndex := r.getLastIndex()
 
@@ -2407,7 +2408,7 @@ func (r *Raft) dispatchLogsForLeader(applyLogs []*logFuture) {
 func (r *Raft) dispatchLogsForGroupLeader(applyLogs []*logFuture) {
 	now := time.Now()
 	defer metrics.MeasureSince([]string{"raft", "leader", "dispatchLog"}, now)
-
+	r.logger.Debug("dispatchLogsForGroupLeader begin in ", r.getState())
 	term := r.getCurrentTerm()
 	lastIndex := r.getLastIndex()
 
@@ -2630,6 +2631,8 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 	defer func() {
 		rpc.Respond(resp, rpcErr)
 	}()
+
+	r.logger.Debug("appendEntries", "term", a.Term, "leader", a.ID, "prevLog", a.PrevLogEntry, "commit", a.LeaderCommitIndex, "entries", len(a.Entries), "in ", r.getState())
 
 	// Ignore an older term
 	if a.Term < r.getCurrentTerm() {
