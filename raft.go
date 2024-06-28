@@ -231,6 +231,16 @@ func (r *Raft) runGroupFollower() {
 			// Reject any operations since we are not the leader
 			a.respond(ErrNotLeader)
 
+		case a := <-r.applyForLeaderCh:
+			r.mainThreadSaturation.working()
+			// Reject any operations since we are not the leader
+			a.respond(ErrNotLeader)
+
+		case a := <-r.applyForGroupLeaderCh:
+			r.mainThreadSaturation.working()
+			// Reject any operations since we are not the leader
+			a.respond(ErrNotLeader)
+
 		case v := <-r.verifyCh:
 			r.mainThreadSaturation.working()
 			// Reject any operations since we are not the leader
@@ -511,6 +521,16 @@ func (r *Raft) runGroupCandidate() {
 			// Reject any operations since we are not the leader
 			a.respond(ErrNotLeader)
 
+		case a := <-r.applyForLeaderCh:
+			r.mainThreadSaturation.working()
+			// Reject any operations since we are not the leader
+			a.respond(ErrNotLeader)
+
+		case a := <-r.applyForGroupLeaderCh:
+			r.mainThreadSaturation.working()
+			// Reject any operations since we are not the leader
+			a.respond(ErrNotLeader)
+
 		case v := <-r.verifyCh:
 			r.mainThreadSaturation.working()
 			// Reject any operations since we are not the leader
@@ -620,6 +640,16 @@ func (r *Raft) runCandidate() {
 			c.respond(ErrNotLeader)
 
 		case a := <-r.applyCh:
+			r.mainThreadSaturation.working()
+			// Reject any operations since we are not the leader
+			a.respond(ErrNotLeader)
+
+		case a := <-r.applyForLeaderCh:
+			r.mainThreadSaturation.working()
+			// Reject any operations since we are not the leader
+			a.respond(ErrNotLeader)
+
+		case a := <-r.applyForGroupLeaderCh:
 			r.mainThreadSaturation.working()
 			// Reject any operations since we are not the leader
 			a.respond(ErrNotLeader)
@@ -1440,7 +1470,7 @@ func (r *Raft) groupLeaderLoop() {
 			r.mainThreadSaturation.working()
 			b.respond(ErrCantBootstrap)
 
-		case newLog := <-r.applyCh:
+		case newLog := <-r.applyForGroupLeaderCh:
 			r.mainThreadSaturation.working()
 			if r.getGroupLeadershipTransferInProgress() {
 				r.logger.Debug(ErrLeadershipTransferInProgress.Error())
@@ -1452,7 +1482,7 @@ func (r *Raft) groupLeaderLoop() {
 		GROUP_COMMIT_LOOP:
 			for i := 0; i < r.config().MaxAppendEntries; i++ {
 				select {
-				case newLog := <-r.applyCh:
+				case newLog := <-r.applyForGroupLeaderCh:
 					ready = append(ready, newLog)
 				default:
 					break GROUP_COMMIT_LOOP
@@ -1778,7 +1808,7 @@ func (r *Raft) leaderLoop() {
 			r.mainThreadSaturation.working()
 			b.respond(ErrCantBootstrap)
 
-		case newLog := <-r.applyCh:
+		case newLog := <-r.applyForLeaderCh:
 			r.mainThreadSaturation.working()
 			if r.getLeadershipTransferInProgress() {
 				r.logger.Debug(ErrLeadershipTransferInProgress.Error())
@@ -1790,7 +1820,7 @@ func (r *Raft) leaderLoop() {
 		GROUP_COMMIT_LOOP:
 			for i := 0; i < r.config().MaxAppendEntries; i++ {
 				select {
-				case newLog := <-r.applyCh:
+				case newLog := <-r.applyForLeaderCh:
 					ready = append(ready, newLog)
 				default:
 					break GROUP_COMMIT_LOOP
@@ -1806,11 +1836,11 @@ func (r *Raft) leaderLoop() {
 			} else {
 				r.dispatchLogsForLeader(ready)
 			}
+			r.applyForGroupLeaderCh <- newLog
 
 		case <-lease:
 			r.mainThreadSaturation.working()
 			// Check if we've exceeded the lease, potentially stepping down
-			r.logger.Debug("checking lease begin")
 			maxDiff := r.checkLeaderLease()
 
 			// Next check interval should adjust for the last node we've
@@ -2512,6 +2542,7 @@ func (r *Raft) processLogs(index uint64, futures map[uint64]*logFuture) {
 
 	// Update the lastApplied index and term
 	r.setLastApplied(index)
+
 }
 
 // processLog is invoked to process the application of a single committed log entry.
