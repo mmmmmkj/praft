@@ -1470,6 +1470,10 @@ func (r *Raft) groupLeaderLoop() {
 			r.mainThreadSaturation.working()
 			b.respond(ErrCantBootstrap)
 
+		case a := <-r.applyForLeaderCh:
+			r.mainThreadSaturation.working()
+			// Reject any operations since we are not the leader
+			a.respond(ErrNotLeader)
 		case newLog := <-r.applyForGroupLeaderCh:
 			r.mainThreadSaturation.working()
 			if r.getGroupLeadershipTransferInProgress() {
@@ -1496,6 +1500,7 @@ func (r *Raft) groupLeaderLoop() {
 					ready[i].respond(ErrNotLeader)
 				}
 			} else {
+				r.logger.Debug("dispatchLogsForGroupLeader begin")
 				r.dispatchLogsForGroupLeader(ready)
 			}
 
@@ -1807,6 +1812,10 @@ func (r *Raft) leaderLoop() {
 		case b := <-r.bootstrapCh:
 			r.mainThreadSaturation.working()
 			b.respond(ErrCantBootstrap)
+		case a := <-r.applyForGroupLeaderCh:
+			r.mainThreadSaturation.working()
+			// Reject any operations since we are not the leader
+			a.respond(ErrNotLeader)
 
 		case newLog := <-r.applyForLeaderCh:
 			r.mainThreadSaturation.working()
@@ -1837,6 +1846,7 @@ func (r *Raft) leaderLoop() {
 				r.dispatchLogsForLeader(ready)
 			}
 			r.applyForGroupLeaderCh <- newLog
+			r.logger.Debug("applyForGroupLeaderCh <- newLog")
 
 		case <-lease:
 			r.mainThreadSaturation.working()
@@ -2768,6 +2778,7 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 			r.setCommittedConfiguration(r.configurations.latest, r.configurations.latestIndex)
 		}
 		r.processLogs(idx, nil)
+		r.logger.Debug("processlogs in ", r.getState())
 		metrics.MeasureSince([]string{"raft", "rpc", "appendEntries", "processLogs"}, start)
 	}
 
