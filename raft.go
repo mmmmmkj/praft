@@ -2632,12 +2632,12 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 		rpc.Respond(resp, rpcErr)
 	}()
 
-	r.logger.Debug("appendEntries", "term", a.Term, "leader", a.ID, "prevLog", a.PrevLogEntry, "commit", a.LeaderCommitIndex, "entries", len(a.Entries), "in ", r.getState())
-
 	// Ignore an older term
 	if a.Term < r.getCurrentTerm() {
 		return
 	}
+
+	r.logger.Debug("appendEntries", "term", a.Term, "leader", a.ID, "prevLog", a.PrevLogEntry, "commit", a.LeaderCommitIndex, "entries", len(a.Entries), "in ", r.getState())
 
 	// Increase the term if we see a newer one, also transition to follower
 	// if we ever get an appendEntries call
