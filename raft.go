@@ -2381,6 +2381,7 @@ func (r *Raft) dispatchLogsForLeader(applyLogs []*logFuture) {
 		applyLog.log.AppendedAt = now
 		logs[idx] = &applyLog.log
 		r.leaderState.inflight.PushBack(applyLog)
+		r.groupLeaderState.inflight.PushBack(applyLog)
 	}
 
 	// Write the log entry locally
@@ -2393,13 +2394,18 @@ func (r *Raft) dispatchLogsForLeader(applyLogs []*logFuture) {
 		return
 	}
 	r.leaderState.commitment.match(r.localID, lastIndex)
-
+	r.groupLeaderState.commitment.match(r.localID, lastIndex)
 	// Update the last log since it's on disk now
 	r.setLastLog(lastIndex, term)
 
 	// Notify the replicators of the new log
 	for _, f := range r.leaderState.replState {
 		asyncNotifyCh(f.triggerForLeaderCh)
+	}
+
+	// Notify the replicators of the new log
+	for _, f := range r.groupLeaderState.replState {
+		asyncNotifyCh(f.triggerForGroupLeaderCh)
 	}
 }
 

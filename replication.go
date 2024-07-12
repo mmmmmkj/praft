@@ -294,7 +294,7 @@ START:
 	peer = s.peer
 	s.peerLock.RUnlock()
 
-	if (r.getState() == Leader && r.hasGroupLeader(peer.ID, peer.Address)) || (r.getState() == GroupLeader && r.hasGroupFollower(peer.ID, peer.Address)) {
+	if (r.getState() == Leader && (r.hasGroupLeader(peer.ID, peer.Address) || r.hasGroupFollower(peer.ID, peer.Address))) || (r.getState() == GroupLeader && r.hasGroupFollower(peer.ID, peer.Address)) {
 
 		// Setup the request
 		if err := r.setupAppendEntries(s, &req, atomic.LoadUint64(&s.nextIndex), lastIndex); err == ErrLogNotFound {
