@@ -2666,6 +2666,7 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 			r.setLeader(r.trans.DecodePeer(a.Leader), ServerID(a.ID))
 		}
 	}
+	r.logger.Debug("appendEntries", "Verify the last log entry", "a.PrevLogEntry = ", a.PrevLogEntry)
 
 	// Verify the last log entry
 	if a.PrevLogEntry > 0 {
@@ -2695,7 +2696,7 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 			return
 		}
 	}
-
+	r.logger.Debug("appendEntries", "Process any new entries ", " len(a.Entries) =", len(a.Entries))
 	// Process any new entries
 	if len(a.Entries) > 0 {
 		start := time.Now()
@@ -2729,6 +2730,7 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 			}
 		}
 
+		r.logger.Debug("appendEntries", "Append the new entries ", " len(newEntries) =", len(newEntries))
 		if n := len(newEntries); n > 0 {
 			// Append the new entries
 			if err := r.logs.StoreLogs(newEntries); err != nil {
@@ -2760,7 +2762,7 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 		}
 		metrics.MeasureSince([]string{"raft", "rpc", "appendEntries", "storeLogs"}, start)
 	}
-
+	r.logger.Debug("appendEntries", "Update the commit index")
 	// Update the commit index
 	if a.LeaderCommitIndex > 0 && a.LeaderCommitIndex > r.getCommitIndex() {
 		start := time.Now()
@@ -2776,6 +2778,7 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 
 	// Everything went well, set success
 	resp.Success = true
+	r.logger.Debug("appendEntries", "resp.Success =", resp.Success, "in ", r.getState())
 	r.setLastContact()
 }
 
