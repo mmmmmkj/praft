@@ -2381,7 +2381,6 @@ func (r *Raft) dispatchLogsForLeader(applyLogs []*logFuture) {
 		applyLog.log.AppendedAt = now
 		logs[idx] = &applyLog.log
 		r.leaderState.inflight.PushBack(applyLog)
-		r.groupLeaderState.inflight.PushBack(applyLog)
 	}
 
 	// Write the log entry locally
@@ -2394,7 +2393,6 @@ func (r *Raft) dispatchLogsForLeader(applyLogs []*logFuture) {
 		return
 	}
 	r.leaderState.commitment.match(r.localID, lastIndex)
-	r.groupLeaderState.commitment.match(r.localID, lastIndex)
 	// Update the last log since it's on disk now
 	r.setLastLog(lastIndex, term)
 
@@ -2403,10 +2401,8 @@ func (r *Raft) dispatchLogsForLeader(applyLogs []*logFuture) {
 		asyncNotifyCh(f.triggerForLeaderCh)
 	}
 
-	// Notify the replicators of the new log
-	for _, f := range r.groupLeaderState.replState {
-		asyncNotifyCh(f.triggerForGroupLeaderCh)
-	}
+	r.dispatchLogsForGroupLeader(applyLogs)
+
 }
 
 // dispatchLog is called on the leader to push a log to disk, mark it
@@ -2672,6 +2668,7 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 			r.setLeader(r.trans.DecodePeer(a.Leader), ServerID(a.ID))
 		}
 	}
+
 	r.logger.Debug("appendEntries", "Verify the last log entry", "a.PrevLogEntry = ", a.PrevLogEntry)
 
 	// Verify the last log entry
@@ -2761,11 +2758,6 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 			last := newEntries[n-1]
 			r.setLastLog(last.Index, last.Term)
 		}
-		if r.getState() == GroupLeader || r.getState() == Leader {
-			for _, f := range r.groupLeaderState.replState {
-				asyncNotifyCh(f.triggerForLeaderCh)
-			}
-		}
 		metrics.MeasureSince([]string{"raft", "rpc", "appendEntries", "storeLogs"}, start)
 	}
 	r.logger.Debug("appendEntries", "Update the commit index")
@@ -2780,6 +2772,12 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 		r.processLogs(idx, nil)
 		r.logger.Debug("processlogs in ", r.getState())
 		metrics.MeasureSince([]string{"raft", "rpc", "appendEntries", "processLogs"}, start)
+	}
+
+	if r.getState() == GroupLeader || r.getState() == Leader {
+		for _, f := range r.groupLeaderState.replState {
+			asyncNotifyCh(f.triggerForGroupLeaderCh)
+		}
 	}
 
 	// Everything went well, set success
