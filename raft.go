@@ -2384,6 +2384,7 @@ func (r *Raft) dispatchLogsForLeader(applyLogs []*logFuture) {
 		applyLog.log.AppendedAt = now
 		logs[idx] = &applyLog.log
 		r.leaderState.inflight.PushBack(applyLog)
+		r.groupLeaderState.inflight.PushBack(applyLog)
 	}
 
 	// Write the log entry locally
@@ -2421,29 +2422,30 @@ func (r *Raft) dispatchLogsForGroupLeader(applyLogs []*logFuture) {
 	logs := make([]*Log, n)
 	metrics.SetGauge([]string{"raft", "leader", "dispatchNumLogs"}, float32(n))
 
-	for idx, applyLog := range applyLogs {
-		applyLog.dispatch = now
-		lastIndex++
-		applyLog.log.Index = lastIndex
-		applyLog.log.Term = term
-		applyLog.log.AppendedAt = now
-		logs[idx] = &applyLog.log
-		r.groupLeaderState.inflight.PushBack(applyLog)
-	}
-
-	// Write the log entry locally
-	if err := r.logs.StoreLogs(logs); err != nil {
-		r.logger.Error("failed to commit logs", "error", err)
-		for _, applyLog := range applyLogs {
-			applyLog.respond(err)
+	if r.getState() != GroupLeader {
+		for idx, applyLog := range applyLogs {
+			applyLog.dispatch = now
+			lastIndex++
+			applyLog.log.Index = lastIndex
+			applyLog.log.Term = term
+			applyLog.log.AppendedAt = now
+			logs[idx] = &applyLog.log
+			r.groupLeaderState.inflight.PushBack(applyLog)
 		}
-		r.setState(GroupFollower)
-		return
-	}
-	r.groupLeaderState.commitment.match(r.localID, lastIndex)
+		// Write the log entry locally
+		if err := r.logs.StoreLogs(logs); err != nil {
+			r.logger.Error("failed to commit logs", "error", err)
+			for _, applyLog := range applyLogs {
+				applyLog.respond(err)
+			}
+			r.setState(GroupFollower)
+			return
+		}
+		r.groupLeaderState.commitment.match(r.localID, lastIndex)
 
-	// Update the last log since it's on disk now
-	r.setLastLog(lastIndex, term)
+		// Update the last log since it's on disk now
+		r.setLastLog(lastIndex, term)
+	}
 
 	// Notify the replicators of the new log
 	for _, f := range r.groupLeaderState.replState {
@@ -2772,6 +2774,7 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 	// Update the commit index
 	if a.LeaderCommitIndex > 0 && a.LeaderCommitIndex > r.getCommitIndex() {
 		start := time.Now()
+
 		idx := min(a.LeaderCommitIndex, r.getLastIndex())
 		r.setCommitIndex(idx)
 		if r.configurations.latestIndex <= idx {

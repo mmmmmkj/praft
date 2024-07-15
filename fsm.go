@@ -91,6 +91,7 @@ func (r *Raft) runFSM() {
 			// Invoke the future if given
 			r.logger.Debug("fsm.ApplySingle end req.future")
 			if req.future != nil {
+				r.logger.Debug("req.future!=nil")
 				req.future.response = resp
 				req.future.respond(nil)
 			}
