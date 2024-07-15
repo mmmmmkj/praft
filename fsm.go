@@ -89,6 +89,7 @@ func (r *Raft) runFSM() {
 		// Make sure we send a response
 		defer func() {
 			// Invoke the future if given
+			r.logger.Debug("fsm.ApplySingle end req.future")
 			if req.future != nil {
 				req.future.response = resp
 				req.future.respond(nil)
@@ -104,6 +105,7 @@ func (r *Raft) runFSM() {
 			metrics.MeasureSince([]string{"raft", "fsm", "apply"}, start)
 
 		case LogConfiguration:
+			r.logger.Debug("applySingle fsm.Apply", "req.log LogConfiguration")
 			if !configStoreEnabled {
 				// Return early to avoid incrementing the index and term for
 				// an unimplemented operation.
