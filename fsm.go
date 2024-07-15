@@ -99,6 +99,7 @@ func (r *Raft) runFSM() {
 		case LogCommand:
 			start := time.Now()
 			r.logger.Debug("fsm.Apply", "log", req.log.Data)
+			r.logger.Debug("applySingle fsm.Apply", "req.log", req.log.Index)
 			resp = r.fsm.Apply(req.log)
 			metrics.MeasureSince([]string{"raft", "fsm", "apply"}, start)
 
@@ -121,9 +122,11 @@ func (r *Raft) runFSM() {
 
 	applyBatch := func(reqs []*commitTuple) {
 		if !batchingEnabled {
+			r.logger.Debug("fsm.ApplyBatch", "num", len(reqs))
 			for _, ct := range reqs {
 				applySingle(ct)
 			}
+			r.logger.Debug("fsm.ApplyBatch end")
 			return
 		}
 

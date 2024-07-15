@@ -1665,6 +1665,7 @@ func (r *Raft) leaderLoop() {
 			go r.leadershipTransfer(*id, *address, state, stopCh, doneCh)
 
 		case <-r.leaderState.commitCh:
+			r.logger.Debug("commitCh get")
 			r.mainThreadSaturation.working()
 			// Process the newly committed entries
 			oldCommitIndex := r.getCommitIndex()
@@ -1705,6 +1706,8 @@ func (r *Raft) leaderLoop() {
 			// Process the group
 			if len(groupReady) != 0 {
 				//TODO
+
+				r.logger.Debug("processLogs begin")
 				r.processLogs(lastIdxInGroup, groupFutures)
 
 				for _, e := range groupReady {
