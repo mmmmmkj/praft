@@ -2645,8 +2645,8 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 	r.logger.Debug("appendEntries", "term", a.Term, "leader", a.ID, "prevLog", a.PrevLogEntry, "commit", a.LeaderCommitIndex, "entries", len(a.Entries), "in ", r.getState())
 	for _, entry := range a.Entries {
 		r.logger.Debug("appendEntries", "entry", entry.Index, "type", entry.Type, "str", string(entry.Data[:]))
-		conf := DecodeConfiguration(entry.Data)
-		r.logger.Debug("appendEntries", "entry", entry.Index, "type", entry.Type, "conf", conf)
+		// conf := DecodeConfiguration(entry.Data)
+		// r.logger.Debug("appendEntries", "entry", entry.Index, "type", entry.Type, "conf", conf)
 	}
 
 	// Increase the term if we see a newer one, also transition to follower
