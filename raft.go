@@ -698,7 +698,7 @@ func (r *Raft) getGroupLeadershipTransferInProgress() bool {
 
 func (r *Raft) setupLeaderState() {
 	r.leaderState.commitCh = make(chan struct{}, 1)
-	r.leaderState.commitment = newCommitment(r.leaderState.commitCh,
+	r.leaderState.commitment = newCommitmentForLeader(r.leaderState.commitCh,
 		r.configurations.latest,
 		r.getLastIndex()+1 /* first index that may be committed in this term */)
 	r.leaderState.inflight = list.New()
@@ -709,9 +709,10 @@ func (r *Raft) setupLeaderState() {
 
 func (r *Raft) setupGroupLeaderState() {
 	r.groupLeaderState.commitCh = make(chan struct{}, 1)
-	r.groupLeaderState.commitment = newCommitment(r.groupLeaderState.commitCh,
+	r.groupLeaderState.commitment = newCommitmentForGroupLeader(r.groupLeaderState.commitCh,
 		r.configurations.latest,
-		r.getLastIndex()+1 /* first index that may be committed in this term */)
+		r.getLastIndex()+1, /* first index that may be committed in this term */
+		r.groupId)
 	r.groupLeaderState.inflight = list.New()
 	r.groupLeaderState.replState = make(map[ServerID]*followerReplication)
 	r.groupLeaderState.notify = make(map[*verifyFuture]struct{})

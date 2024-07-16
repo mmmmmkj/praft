@@ -47,6 +47,35 @@ func newCommitment(commitCh chan struct{}, configuration Configuration, startInd
 	}
 }
 
+func newCommitmentForLeader(commitCh chan struct{}, configuration Configuration, startIndex uint64) *commitment {
+	matchIndexes := make(map[ServerID]uint64)
+	for _, server := range configuration.ServersIsGroupLeader {
+		if server.Suffrage == Voter {
+			matchIndexes[server.ID] = 0
+		}
+	}
+	return &commitment{
+		commitCh:     commitCh,
+		matchIndexes: matchIndexes,
+		commitIndex:  0,
+		startIndex:   startIndex,
+	}
+}
+func newCommitmentForGroupLeader(commitCh chan struct{}, configuration Configuration, startIndex uint64, groupID uint64) *commitment {
+	matchIndexes := make(map[ServerID]uint64)
+	for _, server := range configuration.ServersInGroup[groupID] {
+		if server.Suffrage == Voter {
+			matchIndexes[server.ID] = 0
+		}
+	}
+	return &commitment{
+		commitCh:     commitCh,
+		matchIndexes: matchIndexes,
+		commitIndex:  0,
+		startIndex:   startIndex,
+	}
+}
+
 // Called when a new cluster membership configuration is created: it will be
 // used to determine commitment from now on. 'configuration' is the servers in
 // the cluster.
@@ -99,6 +128,7 @@ func (c *commitment) recalculate() {
 
 	if quorumMatchIndex > c.commitIndex && quorumMatchIndex >= c.startIndex {
 		c.commitIndex = quorumMatchIndex
+		//todo
 		asyncNotifyCh(c.commitCh)
 	}
 }
