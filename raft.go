@@ -2772,10 +2772,12 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 	}
 	r.logger.Debug("appendEntries", "Update the commit index")
 	// Update the commit index
+	r.logger.Debug("appendEntries", "a.LeaderCommitIndex = ", a.LeaderCommitIndex, "r.getCommitIndex() = ", r.getCommitIndex(), "r.getLastIndex() = ", r.getLastIndex())
 	if a.LeaderCommitIndex > 0 && a.LeaderCommitIndex > r.getCommitIndex() {
 		start := time.Now()
 
 		idx := min(a.LeaderCommitIndex, r.getLastIndex())
+		r.logger.Debug("appendEntries", "idx = ", idx, "in ", r.getState())
 		r.setCommitIndex(idx)
 		if r.configurations.latestIndex <= idx {
 			r.setCommittedConfiguration(r.configurations.latest, r.configurations.latestIndex)
