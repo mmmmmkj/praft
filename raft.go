@@ -1322,6 +1322,7 @@ func (r *Raft) groupLeaderLoop() {
 
 		//提交日志
 		case <-r.groupLeaderState.commitCh:
+			r.logger.Debug("leaderState.commitCh get")
 			r.mainThreadSaturation.working()
 			// Process the newly committed entries
 			oldCommitIndex := r.getCommitIndex()
@@ -1666,8 +1667,74 @@ func (r *Raft) leaderLoop() {
 			r.setLeadershipTransferInProgress(true)
 			go r.leadershipTransfer(*id, *address, state, stopCh, doneCh)
 
+		case <-r.groupLeaderState.commitCh:
+			r.logger.Debug("leaderState.commitCh get")
+			r.mainThreadSaturation.working()
+			// Process the newly committed entries
+			oldCommitIndex := r.getCommitIndex()
+			commitIndex := r.groupLeaderState.commitment.getCommitIndex()
+			r.setCommitIndex(commitIndex)
+
+			// New configuration has been committed, set it as the committed
+			// value.
+			if r.configurations.latestIndex > oldCommitIndex &&
+				r.configurations.latestIndex <= commitIndex {
+				r.setCommittedConfiguration(r.configurations.latest, r.configurations.latestIndex)
+				if !hasVote(r.configurations.committed, r.localID) {
+					stepDown = true
+				}
+			}
+
+			start := time.Now()
+			var groupReady []*list.Element
+			groupFutures := make(map[uint64]*logFuture)
+			var lastIdxInGroup uint64
+
+			// Pull all inflight logs that are committed off the queue.
+			for e := r.groupLeaderState.inflight.Front(); e != nil; e = e.Next() {
+				commitLog := e.Value.(*logFuture)
+				idx := commitLog.log.Index
+				if idx > commitIndex {
+					// Don't go past the committed index
+					break
+				}
+
+				// Measure the commit time
+				metrics.MeasureSince([]string{"raft", "commitTime"}, commitLog.dispatch)
+				groupReady = append(groupReady, e)
+				groupFutures[idx] = commitLog
+				lastIdxInGroup = idx
+			}
+
+			// Process the group
+			if len(groupReady) != 0 {
+				//TODO
+
+				r.logger.Debug("processLogs begin")
+				r.processLogs(lastIdxInGroup, groupFutures)
+
+				for _, e := range groupReady {
+					r.groupLeaderState.inflight.Remove(e)
+				}
+			}
+
+			// Measure the time to enqueue batch of logs for FSM to apply
+			metrics.MeasureSince([]string{"raft", "fsm", "enqueue"}, start)
+
+			// Count the number of logs enqueued
+			metrics.SetGauge([]string{"raft", "commitNumLogs"}, float32(len(groupReady)))
+
+			if stepDown {
+				if r.config().ShutdownOnRemove {
+					r.logger.Info("removed ourself, shutting down")
+					r.Shutdown()
+				} else {
+					r.logger.Info("removed ourself, transitioning to follower")
+					r.setState(GroupLeader)
+				}
+			}
 		case <-r.leaderState.commitCh:
-			r.logger.Debug("commitCh get")
+			r.logger.Debug("leaderState.commitCh get")
 			r.mainThreadSaturation.working()
 			// Process the newly committed entries
 			oldCommitIndex := r.getCommitIndex()
