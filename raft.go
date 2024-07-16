@@ -2397,7 +2397,9 @@ func (r *Raft) dispatchLogsForLeader(applyLogs []*logFuture) {
 		r.setState(GroupLeader)
 		return
 	}
+
 	r.leaderState.commitment.match(r.localID, lastIndex)
+	r.groupLeaderState.commitment.match(r.localID, lastIndex)
 	// Update the last log since it's on disk now
 	r.setLastLog(lastIndex, term)
 
