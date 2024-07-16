@@ -1138,6 +1138,7 @@ func (r *Raft) startStopReplicationForLeader() {
 			r.logger.Debug("r.leaderState.replState[server.ID] = s", server.ID)
 			r.leaderState.replState[server.ID] = s
 			r.goFunc(func() { r.replicateForLeader(s) })
+
 			r.logger.Debug("asyncNotifyCh(s.triggerForLeaderCh) in ", r.getState())
 			asyncNotifyCh(s.triggerForLeaderCh)
 			r.observe(PeerObservation{Peer: server, Removed: false})
@@ -2775,7 +2776,7 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 	r.logger.Debug("appendEntries", "a.LeaderCommitIndex = ", a.LeaderCommitIndex, "r.getCommitIndex() = ", r.getCommitIndex(), "r.getLastIndex() = ", r.getLastIndex())
 	if a.LeaderCommitIndex > 0 && a.LeaderCommitIndex > r.getCommitIndex() {
 		start := time.Now()
-
+		r.logger.Debug("appendEntries in update", "a.LeaderCommitIndex = ", a.LeaderCommitIndex, "r.getCommitIndex() = ", r.getCommitIndex(), "r.getLastIndex() = ", r.getLastIndex())
 		idx := min(a.LeaderCommitIndex, r.getLastIndex())
 		r.logger.Debug("appendEntries", "idx = ", idx, "in ", r.getState())
 		r.setCommitIndex(idx)

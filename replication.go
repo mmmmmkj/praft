@@ -171,6 +171,19 @@ RPC:
 			lastLogIdx, _ := r.getLastLog()
 			shouldStop = r.replicateTo(s, lastLogIdx)
 
+		case deferErr := <-s.triggerForGroupLeaderDeferErrorCh:
+			r.logger.Debug("get triggerForGroupLeaderDeferErrorCh shouldStop = r.replicateTo(s, lastLogIdx)")
+			lastLogIdx, _ := r.getLastLog()
+			shouldStop = r.replicateTo(s, lastLogIdx)
+			if !shouldStop {
+				deferErr.respond(nil)
+			} else {
+				deferErr.respond(fmt.Errorf("replication failed"))
+			}
+		case <-s.triggerForGroupLeaderCh:
+			r.logger.Debug("get triggerForGroupLeaderCh shouldStop = r.replicateTo(s, lastLogIdx)")
+			lastLogIdx, _ := r.getLastLog()
+			shouldStop = r.replicateTo(s, lastLogIdx)
 		// This is _not_ our heartbeat mechanism but is to ensure
 		// followers quickly learn the leader's commit index when
 		// raft commits stop flowing naturally. The actual heartbeats
@@ -324,6 +337,7 @@ START:
 
 		// Update s based on success
 		if resp.Success {
+			r.logger.Debug("appendEntries succeeded", "peer", peer, "next", atomic.LoadUint64(&s.nextIndex))
 			// Update our replication state
 			updateLastAppended(s, &req)
 
@@ -560,6 +574,17 @@ SEND:
 				deferErr.respond(fmt.Errorf("replication failed"))
 			}
 		case <-s.triggerForLeaderCh:
+			lastLogIdx, _ := r.getLastLog()
+			shouldStop = r.pipelineSend(s, pipeline, &nextIndex, lastLogIdx)
+		case deferErr := <-s.triggerForGroupLeaderDeferErrorCh:
+			lastLogIdx, _ := r.getLastLog()
+			shouldStop = r.pipelineSend(s, pipeline, &nextIndex, lastLogIdx)
+			if !shouldStop {
+				deferErr.respond(nil)
+			} else {
+				deferErr.respond(fmt.Errorf("replication failed"))
+			}
+		case <-s.triggerForGroupLeaderCh:
 			lastLogIdx, _ := r.getLastLog()
 			shouldStop = r.pipelineSend(s, pipeline, &nextIndex, lastLogIdx)
 		case <-randomTimeout(r.config().CommitTimeout):
