@@ -6,6 +6,8 @@ package raft
 import (
 	"sort"
 	"sync"
+
+	"github.com/wonderivan/logger"
 )
 
 // Commitment is used to advance the leader's commit index. The leader and
@@ -125,9 +127,10 @@ func (c *commitment) recalculate() {
 	}
 	sort.Sort(uint64Slice(matched))
 	quorumMatchIndex := matched[(len(matched)-1)/2]
-
+	logger.Debug("quorumMatchIndex: %d c.commitIndex: %d ", quorumMatchIndex, c.commitIndex)
 	if quorumMatchIndex > c.commitIndex && quorumMatchIndex >= c.startIndex {
 		c.commitIndex = quorumMatchIndex
+		logger.Debug("change quorumMatchIndex: %d c.commitIndex: %d ", quorumMatchIndex, c.commitIndex)
 		//todo
 		asyncNotifyCh(c.commitCh)
 	}

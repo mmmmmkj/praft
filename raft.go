@@ -2398,9 +2398,11 @@ func (r *Raft) dispatchLogsForLeader(applyLogs []*logFuture) {
 		r.setState(GroupLeader)
 		return
 	}
-
+	r.logger.Debug("before leaderState.commitment.match", "leadercommit", r.commitIndex)
 	r.leaderState.commitment.match(r.localID, lastIndex)
+	r.logger.Debug("after leaderState.commitment.match", "leadercommit", r.commitIndex)
 	r.groupLeaderState.commitment.match(r.localID, lastIndex)
+	r.logger.Debug("after groupLeaderState.commitment.match", "leadercommit", r.commitIndex)
 	// Update the last log since it's on disk now
 	r.setLastLog(lastIndex, term)
 
