@@ -2422,7 +2422,7 @@ func (r *Raft) dispatchLogsForGroupLeader(applyLogs []*logFuture) {
 	logs := make([]*Log, n)
 	metrics.SetGauge([]string{"raft", "leader", "dispatchNumLogs"}, float32(n))
 
-	if r.getState() != GroupLeader {
+	if r.getState() != Leader {
 		for idx, applyLog := range applyLogs {
 			applyLog.dispatch = now
 			lastIndex++
